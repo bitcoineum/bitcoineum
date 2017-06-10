@@ -38,6 +38,9 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    // 2016 blocks.
    uint public difficultyAdjustmentPeriod;
 
+   // When was the last time we did a difficulty adjustment.
+   uint public lastDifficultyAdjustmentEthereumBlock;
+
    // Total blocks mined helps us calculate the current reward
    uint public totalBlocksMined;
 
@@ -192,6 +195,12 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
                            initBlock(external_to_internal_block_number(block.number))
                            blockRedeemed(external_to_internal_block_number(block.number))
                            alreadyMined(external_to_internal_block_number(block.number), msg.sender) returns (bool) {
+      // Let's immediately adjust the difficulty
+      // In case an abnormal period of time has elapsed
+      // nobody has been mining etc.
+      // Will let us recover the network even if the
+      // difficulty spikes to some absurd amount
+      adjust_difficulty();
       uint internalBlockNum = external_to_internal_block_number(block.number);
 
       miningAttempts[internalBlockNum][msg.sender] =
@@ -278,9 +287,8 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
       // difficulty is too high. So we should instead base the adjustment
       // on the progression of the Ethereum network.
 
-      if ((block.number % (difficultyAdjustmentPeriod * blockCreationRate)) == 0) {
+      if ((block.number - lastDifficultyAdjustmentEthereumBlock) > (difficultyAdjustmentPeriod * blockCreationRate)) {
           // The adjustment window has been fulfilled
-
           // The new difficulty should be bounded by the total wei actually spent
           // capped at 4 times
 
@@ -304,6 +312,10 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
 
           // Regardless of difficulty adjustment, let us totalWeiCommited
           totalWeiCommitted = 0;
+
+           // Lets reset the difficulty adjustment block target
+           lastDifficultyAdjustmentEthereumBlock = block.number;
+
       }
    }
 
@@ -356,7 +368,10 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
         throw;
       }
 
-      // If attempt is valid, invalidate redemption, adjust difficulty
+      // If attempt is valid, invalidate redemption
+      // Difficulty is adjusted here
+      // and on bidding, in case bidding stalls out for some
+      // unusual period of time.
       // Do everything, then adjust supply and balance
       blockData[_blockNumber].payed = true;
       blockData[_blockNumber].payee = msg.sender;

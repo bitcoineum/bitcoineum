@@ -39,6 +39,8 @@ contract Bitcoineum is ERC20Mineable {
     totalWeiExpected = difficultyAdjustmentPeriod * currentDifficultyWei;
 
     burnAddress = 0xdeaDDeADDEaDdeaDdEAddEADDEAdDeadDEADDEaD;
+
+    lastDifficultyAdjustmentEthereumBlock = block.number; 
  }
 
  }
