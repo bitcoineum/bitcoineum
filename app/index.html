@@ -8,18 +8,38 @@
 <body>
   <h1>Bitcoineum</h1>
   <h3>Current balance: <span class="black"><span id="balance"></span> BTE</span></h3>
-  <h3>Total: <span class="black"><span id="total_bte"></span> BTE</span></h3>
   <h3>BlockNumber: <span class="black"><span id="bte_block"></span></span></h3>
-  <h3>Current Difficulty: <span class="black"><span id="bte_difficulty"></span></span></h3>
-  <h3>Total Wei Expected: <span class="black"><span id="bte_expected"></span></span></h3>
-  
+  <h3>Current Difficulty per block: <span class="black"><span id="bte_difficulty"></span></span></h3>
+  <h3>Total Wei Expected per block period: <span class="black"><span id="bte_expected"></span></span></h3>
+  <h3>Total Wei Committed this block period: <span class="black"><span id="bte_committed"></span></span></h3>
+  <br>
+  <h1>Mine Bitcoineum</h1>
+  <br>
+  <br><label for="amount">Mining Attempt Amount:</label><input type="text" id="attempt_amount" placeholder="e.g., 100000000000000 minimum"> </input>
+  <br><br><button id="mine" onclick="App.mine()">Mine Bitcoineum</button>
+  <br><br>
 
+  <h1>Claim Bitcoineum</h1>
+  <br>
+  <br><label for="block">BitcoineumBlock:</label><input type="text" id="claim_block_number" placeholder="e.g., 100"></input>
+  <br><br><button id="claim" onclick="App.claim()">Claim Bitcoineum</button>
+  <br><br>
+  <h1>Check Winner</h1>
+  <br>
+  <br><label for="block">BitcoineumBlock:</label><input type="text" id="check_block_number" placeholder="e.g., 100"></input>
+  <br><br><button id="check" onclick="App.check()">Check block didwin</button>
+  <br><br>
+
+
+
+<!--
   <br>
   <h1>Send Bitcoineum</h1>
   <br><label for="amount">Amount:</label><input type="text" id="amount" placeholder="e.g., 95"></input>
   <br><label for="receiver">To Address:</label><input type="text" id="receiver" placeholder="e.g., 0x93e66d9baea28c17d9fc393b53e3fbdd76899dae"></input>
   <br><br><button id="send" onclick="App.sendCoin()">Send Bitcoineum</button>
   <br><br>
+-->
   <span id="status"></span>
   <br>
   <span class="hint"><strong>Hint:</strong> open the browser developer console to view any errors and warnings.</span>

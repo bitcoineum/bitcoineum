@@ -29,18 +29,19 @@ contract Bitcoineum is ERC20Mineable {
     blockNumber = 1;
 
     // Ethereum blocks to internal blocks
-    blockCreationRate = 50;
+    blockCreationRate = 10;
 
     // Adjust difficulty x claimed internal blocks
     difficultyAdjustmentPeriod = 2016;
 
-    totalBlocksMined = 1;
+    totalBlocksMined = 0;
 
     totalWeiExpected = difficultyAdjustmentPeriod * currentDifficultyWei;
 
     burnAddress = 0xdeaDDeADDEaDdeaDdEAddEADDEAdDeadDEADDEaD;
 
     lastDifficultyAdjustmentEthereumBlock = block.number; 
+    genesisBlock = block.number;
  }
 
  }
