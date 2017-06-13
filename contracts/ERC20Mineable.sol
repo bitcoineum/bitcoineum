@@ -270,7 +270,7 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    }
 
    function calculate_difficulty_attempt(InternalBlock b,
-                                         uint value) internal constant returns (uint) {
+                                         uint value) internal constant returns (uint256) {
       // The total amount of Wei sent for this mining attempt exceeds the difficulty level
       // So the calculation of percentage keyspace should be done on the total wei.
       uint selectedDifficultyWei = 0;
@@ -281,7 +281,18 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
       }
 
       // normalize the value against the entire key space
-      return (( value / selectedDifficultyWei) * (2 ** 256 - 1));
+      // Multiply it out because we do not have floating point
+      // 10000 is .0001 % increments
+
+      uint256 intermediate = ((value * 10000) / selectedDifficultyWei);
+      uint256 max_int = 0;
+      // Underflow to maxint
+      max_int = max_int - 1;
+      if (intermediate >= 10000) {
+         return max_int;
+      } else {
+         return intermediate * (max_int / 10000);
+      }
    }
 
    function calculate_range_attempt(uint difficulty, uint offset) internal constant returns (uint, uint) {
@@ -305,7 +316,15 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
       } else {
            mined_block_period = totalBlocksMined;
       }
-      return (50 ** (1 / ( mined_block_period / 210000)));
+
+      // Again we have to do this iteratively because of floating
+      // point limitations in solidity.
+      uint total_reward = 50;
+      for (uint i=0; i < (mined_block_period / totalBlocksMined); i++) {
+          total_reward = total_reward / 2;
+      }
+      return total_reward;
+
    }
 
    function adjust_difficulty() internal {
