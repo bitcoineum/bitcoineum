@@ -37,7 +37,6 @@ window.App = {
       console.log("Starting Bitcoineum Miner...");
       self.miner = new BitcoineumMiner(account);
 
-      console.log("Using account: " + account);
       self.refreshStats();
       self.watchMiningAttempts();
 

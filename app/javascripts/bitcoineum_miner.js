@@ -27,6 +27,8 @@ class BitcoineumBlock {
 		            this.reward = miner.calculateMiningReward();
 		            this.payed = false;
 		            this.payee = null;
+		            this.didWin = false;
+
 		    		if (arguments.length == 1) {
 		    			this.targetDifficultyWei = miner.currentDifficultyWei;
 		                this.totalMiningWei = 0;
@@ -46,13 +48,16 @@ class BitcoineumMiner {
 
 	constructor(miningAccount) {
 		console.log("Initializing Bitcoineum Miner...");
+		console.log("Using mining account: " + miningAccount);
 		this.bitcoineum_contract = contract(bitcoineum_artifacts);
 		this.bitcoineum_contract.setProvider(web3.currentProvider);
 		this.mining_account = miningAccount;
 
 		this.tracked_blocks = {};
-		this.pending_won_blocks = [];
-		this.lost_blocks = [];
+
+		this.pending_won_blocks = {};
+
+		this.pending_check_blocks = {};
 
 		this.external_block = null;
 
@@ -66,6 +71,8 @@ class BitcoineumMiner {
 		this.totalBlocksMined = null; 
 		this.totalWeiCommitted = null; 
 		this.totalWeiExpected = null; 
+
+		this.minimumMineAttempt = null;
 
 		// Let's initialize after the node is done syncing
 		// and set up callbacks
@@ -114,7 +121,7 @@ class BitcoineumMiner {
 
 	}
 
-	initializeState(currentBlock) {
+	initializeState(currentExternalBlock) {
         var self = this;
 
         var bte;
@@ -132,7 +139,7 @@ class BitcoineumMiner {
 		    self.balance = balance;
 
 			// External best block on sync
-		    self.external_block = currentBlock;
+		    self.external_block = currentExternalBlock;
 
 		    // Break out the contract state into it's respective
 		    // Variables
@@ -140,7 +147,7 @@ class BitcoineumMiner {
 		    self.currentDifficultyWei = contractState[0];
 		    self.minimumDifficultyThresholdWei = contractState[1];
 
-		    self.blockNumber = contractState[2].toNumber();
+		    self.last_processed_blockNumber = contractState[2].toNumber();
 		    self.blockCreationRate = contractState[3].toNumber();
 		    self.difficultyAdjustmentPeriod = contractState[4].toNumber();
 		    self.rewardAdjustmentPeriod = contractState[5].toNumber();
@@ -150,6 +157,11 @@ class BitcoineumMiner {
 		    // These should be left as big numbers
 		    self.totalWeiCommitted = contractState[8];
 		    self.totalWeiExpected = contractState[9];
+		    
+		    // Calculate the currently active Bitcoineum block
+		    self.blockNumber = self.currentBlock();
+
+		    self.minimumMineAttempt = self.currentDifficultyWei.dividedBy(1000).ceil();
 
 	        self.printStats();
 	        // Add the initial block
@@ -162,19 +174,23 @@ class BitcoineumMiner {
 		    self.subscribeBlockWatching();
 
 		    // Let's replay mining attempts
-		    self.subscribeMiningAttempts(currentBlock);
+		    self.subscribeMiningAttempts(currentExternalBlock);
 
 		    // Let's replay mining claims
-		    self.subscribeClaimEvents(currentBlock);
+		    self.subscribeClaimEvents(currentExternalBlock);
+
+		    // For debugging let's subscribe to log events
+		    self.subscribeLogEvents(currentExternalBlock);
 		 })
 	}
 
 	printStats() {
         var self = this;
-		console.log("Initial Miner State");
+		console.log("Miner State");
 		console.log("-------------------");
-		console.log("Initial Block Number: " + self.blockNumber);
+		console.log("Block Number: " + self.blockNumber);
 		console.log("Minimum threshold Wei: " + self.minimumDifficultyThresholdWei + " (" + web3.fromWei(self.minimumDifficultyThresholdWei, 'ether') + " ether)");
+		console.log("Minimum mining attempt Wei: " + self.minimumMineAttempt + " (" + web3.fromWei(self.minimumMineAttempt, 'ether') + " ether)");
 		console.log("Block creation rate: " + self.blockCreationRate);
 		console.log("Difficulty adjustment period: " + self.difficultyAdjustmentPeriod);
 		console.log("Last Ethereum block adjustment: " + self.lastDifficultyAdjustmentEthereumBlock);
@@ -216,8 +232,8 @@ class BitcoineumMiner {
   	  var bte;
   	  this.bitcoineum_contract.deployed().then(function(instance) {
   	  	  bte = instance;
-  	  	  var event = bte.MiningAttemptEvent({fromBlock: currentBlock-256});
-  	  	  console.log("Watching mining attempts from block: " + (currentBlock-256));
+  	  	  var event = bte.MiningAttemptEvent(currentBlock);
+  	  	  console.log("Watching mining attempts from block: " + (currentBlock));
   	  	  event.watch(function(error, response) {
   	  	  	  console.log("Got mining attempt event");
   	  	  	  console.log(response.args._from);
@@ -233,8 +249,8 @@ class BitcoineumMiner {
   	  var bte;
   	  this.bitcoineum_contract.deployed().then(function(instance) {
   	  	  bte = instance;
-  	  	  var event = bte.BlockClaimedEvent({fromBlock: currentBlock-256});
-  	  	  console.log("Watching reward claims from block: " + (currentBlock-256));
+  	  	  var event = bte.BlockClaimedEvent({fromBlock: currentBlock});
+  	  	  console.log("Watching reward claims from block: " + (currentBlock));
   	  	  event.watch(function(error, response) {
   	  	  	  console.log("Got block claimed event");
   	  	  	  console.log(response.args._from);
@@ -242,8 +258,18 @@ class BitcoineumMiner {
   	  	  	  console.log(response.args._blockNumber.toString());
 		  });
 	  });
+	}
 
-
+	subscribeLogEvents(currentBlock) {
+  	  var self = this;
+  	  var bte;
+  	  this.bitcoineum_contract.deployed().then(function(instance) {
+  	  	  bte = instance;
+  	  	  var event = bte.LogEvent({fromBlock: currentBlock});
+  	  	  event.watch(function(error, response) {
+  	  	  	  console.log("Log " + response.args._info.toString());
+		  });
+	  });
 	}
 
 	addInitialBlock(blockTargetDifficultyWei, blockTotalMiningWei, blockCurrentAttemptOffset) {
@@ -260,14 +286,30 @@ class BitcoineumMiner {
 	addNewBlock(web3BlockData) {
 		var self = this;
 		// Create a new block entry
+		let previous_blocknum = self.blockNumber;
 		self.blockNumber = self.currentBlock();
 		// Just because we are creating a new Bitcoineum block doesn't mean that the
 		// block exists in the Bitcoineum contract, that won't happen until there is a mining
 		// attempt.
 		// Here we will create block data based on known state, and upate it as we get events
 
+		// Check if the previous block has been recorded
+
+		var b = self.tracked_blocks[previous_blocknum];
+		if (b) {
+			// The previous block exists, and is now mature
+			if (b.miningAttempted) {
+				// I also tried to mine this
+				console.log("Block " + previous_blocknum + " [Check] ");
+				this.pending_check_blocks[previous_blocknum] = self.tracked_blocks[previous_blocknum];
+			} else {
+				console.log("Block " + previous_blocknum + " [Closed] ");
+			}
+			delete self.tracked_blocks[previous_blocknum];
+		}
+
 		self.tracked_blocks[self.blockNumber] = new BitcoineumBlock(self);
-		console.log("Added Bitcoineum block: " + self.blockNumber + "(" + self.external_block + ")");
+		console.log("Block " + self.blockNumber + " (" + self.external_block + ")[Open]");
 	}
 
 	isBlockMature(Block) {
@@ -297,6 +339,83 @@ class BitcoineumMiner {
         }
         return total_reward;
 	}
+
+	// Send a mine attempt transaction
+	// If there are no arguments use the current minimum difficulty
+	mine() {
+		var self = this;
+		var bte;
+		self.bitcoineum_contract.deployed().then(function(instance) {
+			bte = instance;
+			return bte.mine({from: self.mining_account,
+				             gas: 500000,
+				             value: self.minimumMineAttempt.times(1000)});
+        }).then(function(Res) {
+        	      // We won't get a result from the state modifying transaction
+        	      // Have to wait for a mining attempt event
+        	      console.log("Block " + self.blockNumber + " [Pending]");
+        	      self.tracked_blocks[self.blockNumber].miningAttempted = true;
+        }).catch(function(e) {
+        	console.log("Block " + self.blockNumber + " [Error]");
+        	console.log(e);
+        });
+	}
+
+	// Did we win this block?
+	// We ask the network instead of trying
+	// to do this locally because block reorganizations
+	// could mislead us.
+	// If the network says we won, then we can try and claim our prize
+	check(block_to_check) {
+		var self = this;
+		var bte;
+		
+		self.bitcoineum_contract.deployed().then(function(instance) {
+			bte = instance;
+			return bte.checkWinning.call(block_to_check,
+				                    {from: self.mining_account});
+        }).then(function(Result) {
+        	if (Result) {
+        		console.log("Block " + block_to_check + " [Won!]");
+        		if (self.pending_check_blocks[block_to_check]) {
+        			 self.pending_check_blocks[block_to_check].didWin = true;
+				}
+			} else {
+				console.log("Block " + block_to_check + " [Lost]");
+        		if (self.pending_check_blocks[block_to_check]) {
+        			 self.pending_check_blocks[block_to_check].didWin = false;
+				}
+			}
+        }).catch(function(e) {
+          console.log(e);
+          self.setStatus("Block " + block_to_check + " [Error]");
+        });
+
+
+	}
+
+	// If we won, we should be able to claim the block
+	// and redeem the Bitcoineum into our account
+	
+	claim(block_to_claim) {
+		var self = this;
+		var bte;
+		
+		self.bitcoineum_contract.deployed().then(function(instance) {
+			bte = instance;
+			return bte.claim(block_to_claim,
+				             {from: self.mining_account,
+				             	 gas: 500000});
+        }).then(function(Result) {
+        		console.log("Block " + block_to_claim + " [Claimed]");
+        }).catch(function(e) {
+          console.log(e);
+          self.setStatus("Block " + block_to_claim + " [Claim Error]");
+        });
+
+
+	}
+
 
 }
 
