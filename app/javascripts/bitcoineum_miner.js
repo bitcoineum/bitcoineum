@@ -206,7 +206,9 @@ class BitcoineumMiner {
               break;
           }
         });
-      this.blocks.start().catch(console.error);
+      this.blocks.start().then((started) => {
+      		  console.log (started ? 'Block watch started' : 'Block watch already running');
+	  }).catch(console.error);
 	}
 
 	subscribeMiningAttempts(currentBlock) {
