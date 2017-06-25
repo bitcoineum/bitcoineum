@@ -6,6 +6,8 @@ import BigNumber from 'bignumber.js'
 
 import bitcoineum_artifacts from '../../build/contracts/Bitcoineum.json'
 
+import BitcoineumMiner from './bitcoineum_miner';
+
 var Bitcoineum = contract(bitcoineum_artifacts);
 var accounts;
 var account;
@@ -13,6 +15,7 @@ var account;
 window.App = {
   start: function() {
     var self = this;
+
 
     Bitcoineum.setProvider(web3.currentProvider);
 
@@ -30,10 +33,13 @@ window.App = {
 
       accounts = accs;
       account = accounts[0];
+      
+      console.log("Starting Bitcoineum Miner...");
+      self.miner = new BitcoineumMiner(account);
 
+      console.log("Using account: " + account);
       self.refreshStats();
       self.watchMiningAttempts();
-      self.watchBlocks();
 
     });
   },

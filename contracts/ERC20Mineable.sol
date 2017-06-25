@@ -44,6 +44,10 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    // Total blocks mined helps us calculate the current reward
    uint public totalBlocksMined;
 
+   // Reward adjustment period in Bitcoineum native blocks
+
+   uint rewardAdjustmentPeriod; 
+
    // Total amount of Wei put into mining during current period
    uint public totalWeiCommitted;
    // Total amount of Wei expected for this mining period
@@ -86,8 +90,8 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    }
 
    // Each guess gets assigned to a block
-   mapping (uint => InternalBlock) private blockData;
-   mapping (uint => mapping (address => MiningAttempt)) private miningAttempts;
+   mapping (uint => InternalBlock) public blockData;
+   mapping (uint => mapping (address => MiningAttempt)) public miningAttempts;
 
    // Utility related
 
@@ -97,7 +101,67 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
 
    function calculate_maturation_block(uint _externalBlockNum) public constant returns (uint) {
       uint internalBlock = external_to_internal_block_number(_externalBlockNum);
-      return ((internalBlock+1) * blockCreationRate);
+      return targetBlockNumber(internalBlock);
+   }
+
+   // Initial state related
+   /** Dapps need to grab the initial state of the contract
+   * in order to properly initialize mining or tracking
+   * this is a single atomic function for getting state
+   * rather than scattering it across multiple public calls
+   * also returns the current blocks parameters
+   * or default params if it hasn't been created yet
+   */
+
+   function getContractState() public constant
+     returns (uint,  // currentDifficultyWei
+              uint,  // minimumDifficultyThresholdWei
+              uint,  // blockNumber
+              uint,  // blockCreationRate
+              uint,  // difficultyAdjustmentPeriod
+              uint,  // rewardAdjustmentPeriod
+              uint,  // lastDifficultyAdustmentEthereumBlock
+              uint,  // totalBlocksMined
+              uint,  // totalWeiCommitted
+              uint,  // totalWeiExpected
+              uint,  // b.targetDifficultyWei
+              uint,  // b.totalMiningWei
+              uint,  // b.currentAttemptOffset
+              bool   // msg.sender attempted to mine
+              ) {
+    InternalBlock memory b;
+    bool mining_attempted = false;
+    if (!blockData[blockNumber].isCreated) {
+        b = InternalBlock(
+                       {targetDifficultyWei: currentDifficultyWei,
+                       blockNumber: blockNumber,
+                       totalMiningWei: 0,
+                       totalMiningAttempts: 0,
+                       currentAttemptOffset: 0,
+                       payed: false,
+                       payee: 0,
+                       isCreated: true
+                       });
+    } else {
+         b = blockData[blockNumber];
+         if (miningAttempts[blockNumber][msg.sender].isCreated) {
+             mining_attempted = true;
+         }
+    }
+    return (currentDifficultyWei,
+            minimumDifficultyThresholdWei,
+            blockNumber,
+            blockCreationRate,
+            difficultyAdjustmentPeriod,
+            rewardAdjustmentPeriod,
+            lastDifficultyAdjustmentEthereumBlock,
+            totalBlocksMined,
+            totalWeiCommitted,
+            totalWeiExpected,
+            b.targetDifficultyWei,
+            b.totalMiningWei,
+            b.currentAttemptOffset,
+            mining_attempted);
    }
 
    // Mining Related
@@ -123,7 +187,6 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
      }
      _;
    }
-
 
    modifier initBlock(uint _blockNum) {
      require(_blockNum != block.number);
@@ -177,8 +240,12 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
       // We don't really care if the burn fails for some
       // weird reason.
       bool ret = burnAddress.send(value);
-      if (ret) {
-        // Do absolutely nothing
+      // If we cannot burn this ether, than the contract might
+      // be under some kind of stack attack.
+      // Even though it shouldn't matter, let's err on the side of
+      // caution and throw in case there is some invalid state.
+      if (!ret) {
+          throw;
       }
    }
 
@@ -186,7 +253,8 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
        address _from,
        uint _value,
        uint _blockNumber,
-       uint _totalMinedWei
+       uint _totalMinedWei,
+       uint _targetDifficultyWei
    );
 
    /**
@@ -226,7 +294,9 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
       MiningAttemptEvent(msg.sender,
                          msg.value,
                          internalBlockNum,
-                         blockData[internalBlockNum].totalMiningWei);
+                         blockData[internalBlockNum].totalMiningWei,
+                         blockData[internalBlockNum].targetDifficultyWei
+                         );
       // All mining attempt Ether is burned
       burn(msg.value);
       return true;
@@ -244,15 +314,11 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    modifier isBlockMature(uint _blockNumber) {
       require(_blockNumber != block.number);
 
-      // Is the block mature
-      if (block.number < (_blockNumber * blockCreationRate)) {
+      if (!checkBlockMature(_blockNumber)) {
          throw;
       }
 
-      // Is the block inside the redemption window
-      // We cannot look up anything past the previous 256 blocks
-      // which means we have an limited redemption window for block rewards
-      if (block.number >= ((_blockNumber * blockCreationRate) + 256)) {
+      if (!checkRedemptionWindow(_blockNumber)) {
          throw;
       }
       _;
@@ -320,7 +386,7 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
       // Again we have to do this iteratively because of floating
       // point limitations in solidity.
       uint total_reward = 50;
-      for (uint i=0; i < (mined_block_period / totalBlocksMined); i++) {
+      for (uint i=0; i < (mined_block_period / 210000); i++) {
           total_reward = total_reward / 2;
       }
       return total_reward;
@@ -400,6 +466,9 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
       balances[msg.sender] = balances[msg.sender].add(calculate_mining_reward());
       totalSupply += calculate_mining_reward();
       BlockClaimedEvent(msg.sender, calculate_mining_reward(), _blockNumber);
+      // Mining rewards should show up as ERC20 transfer events
+      // So that ERC20 scanners will see token creation.
+      Transfer(this, msg.sender, calculate_mining_reward());
       return true;
    }
 
@@ -428,7 +497,16 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    * @param _blockNum is the internal block number to check 
    */
    function checkBlockMature(uint _blockNum) constant public returns (bool) {
-     return (block.number > ((_blockNum + 1) * blockCreationRate));
+     return (block.number > targetBlockNumber(_blockNum));
+   }
+
+   /**
+   * @dev Check the redemption window for a given block
+   * @param _blockNum is the internal block number to check
+   */
+
+   function checkRedemptionWindow(uint _blockNum) constant public returns (bool) {
+     return block.number <= (targetBlockNumber(_blockNum) + 256);
    }
 
    /** 

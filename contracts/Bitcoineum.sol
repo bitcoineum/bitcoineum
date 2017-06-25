@@ -34,6 +34,10 @@ contract Bitcoineum is ERC20Mineable {
     // Adjust difficulty x claimed internal blocks
     difficultyAdjustmentPeriod = 2016;
 
+    // Reward adjustment
+
+    rewardAdjustmentPeriod = 210000;
+
     totalBlocksMined = 0;
 
     totalWeiExpected = difficultyAdjustmentPeriod * currentDifficultyWei;
