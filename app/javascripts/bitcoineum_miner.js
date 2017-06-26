@@ -52,6 +52,7 @@ class BitcoineumMiner {
 		this.bitcoineum_contract = contract(bitcoineum_artifacts);
 		this.bitcoineum_contract.setProvider(web3.currentProvider);
 		this.mining_account = miningAccount;
+		this.auto_mine = false;
 
 		this.tracked_blocks = {};
 
@@ -82,6 +83,8 @@ class BitcoineumMiner {
 		this.syncStatusChange();
 
 	}
+
+	autoMine() { this.auto_mine = !this.auto_mine };
 
 	waitForSync() {
 		var self = this;
@@ -174,13 +177,13 @@ class BitcoineumMiner {
 		    self.subscribeBlockWatching();
 
 		    // Let's replay mining attempts
-		    self.subscribeMiningAttempts(currentExternalBlock);
+		    // self.subscribeMiningAttempts(currentExternalBlock);
 
 		    // Let's replay mining claims
-		    self.subscribeClaimEvents(currentExternalBlock);
+		    // self.subscribeClaimEvents(currentExternalBlock);
 
 		    // For debugging let's subscribe to log events
-		    self.subscribeLogEvents(currentExternalBlock);
+		    // self.subscribeLogEvents(currentExternalBlock);
 		 })
 	}
 
@@ -232,7 +235,7 @@ class BitcoineumMiner {
   	  var bte;
   	  this.bitcoineum_contract.deployed().then(function(instance) {
   	  	  bte = instance;
-  	  	  var event = bte.MiningAttemptEvent(currentBlock);
+  	  	  var event = bte.MiningAttemptEvent({fromBlock: currentBlock});
   	  	  console.log("Watching mining attempts from block: " + (currentBlock));
   	  	  event.watch(function(error, response) {
   	  	  	  console.log("Got mining attempt event");
@@ -286,22 +289,30 @@ class BitcoineumMiner {
 	addNewBlock(web3BlockData) {
 		var self = this;
 		// Create a new block entry
-		let previous_blocknum = self.blockNumber;
+		let previous_blocknum = self.blockNumber - 1;
 		self.blockNumber = self.currentBlock();
 		// Just because we are creating a new Bitcoineum block doesn't mean that the
 		// block exists in the Bitcoineum contract, that won't happen until there is a mining
 		// attempt.
 		// Here we will create block data based on known state, and upate it as we get events
 
-		// Check if the previous block has been recorded
+		// Check if two blocks previous has been recorded
+		// And if we want to try and claim a reward
 
 		var b = self.tracked_blocks[previous_blocknum];
 		if (b) {
 			// The previous block exists, and is now mature
 			if (b.miningAttempted) {
 				// I also tried to mine this
-				console.log("Block " + previous_blocknum + " [Check] ");
-				this.pending_check_blocks[previous_blocknum] = self.tracked_blocks[previous_blocknum];
+				self.check(previous_blocknum, function(Result) {
+					if (Result) {
+						if (self.auto_mine) {
+						    self.claim(previous_blocknum);
+						}
+					} else {
+						console.log ("Block " + previous_blocknum + " [Missed]");
+					}
+				});
 			} else {
 				console.log("Block " + previous_blocknum + " [Closed] ");
 			}
@@ -310,6 +321,11 @@ class BitcoineumMiner {
 
 		self.tracked_blocks[self.blockNumber] = new BitcoineumBlock(self);
 		console.log("Block " + self.blockNumber + " (" + self.external_block + ")[Open]");
+		// If we are auto mining, then kick off a mine attempt for this block
+		// given the miner parameters
+		if (self.auto_mine) {
+			self.mine();
+		}
 	}
 
 	isBlockMature(Block) {
@@ -366,7 +382,8 @@ class BitcoineumMiner {
 	// to do this locally because block reorganizations
 	// could mislead us.
 	// If the network says we won, then we can try and claim our prize
-	check(block_to_check) {
+	check(block_to_check, callbackFun) {
+		console.log("Block " + block_to_check + " [Check] ");
 		var self = this;
 		var bte;
 		
@@ -375,16 +392,15 @@ class BitcoineumMiner {
 			return bte.checkWinning.call(block_to_check,
 				                    {from: self.mining_account});
         }).then(function(Result) {
-        	if (Result) {
-        		console.log("Block " + block_to_check + " [Won!]");
-        		if (self.pending_check_blocks[block_to_check]) {
-        			 self.pending_check_blocks[block_to_check].didWin = true;
-				}
+        	if (callbackFun) {
+        		callbackFun(Result);
 			} else {
-				console.log("Block " + block_to_check + " [Lost]");
-        		if (self.pending_check_blocks[block_to_check]) {
-        			 self.pending_check_blocks[block_to_check].didWin = false;
-				}
+				// Default fun
+        	    if (Result) {
+        	    	console.log("Block " + block_to_check + " [Won!]");
+			    } else {
+			    	console.log("Block " + block_to_check + " [Lost]");
+			    }
 			}
         }).catch(function(e) {
           console.log(e);

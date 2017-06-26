@@ -38,7 +38,6 @@ window.App = {
       self.miner = new BitcoineumMiner(account);
 
       self.refreshStats();
-      self.watchMiningAttempts();
 
     });
   },
@@ -46,23 +45,6 @@ window.App = {
   setStatus: function(message) {
     var status = document.getElementById("status");
     status.innerHTML = message;
-  },
-
-  watchMiningAttempts: function() {
-
-  	  var self = this;
-  	  var bte;
-  	  Bitcoineum.deployed().then(function(instance) {
-  	  	  bte = instance;
-  	  	  var event = bte.MiningAttemptEvent();
-  	  	  event.watch(function(error, response) {
-  	  	  	  console.log("Got mining attempt event");
-  	  	  	  console.log(response.args._from);
-  	  	  	  console.log(response.args._value.toString());
-  	  	  	  console.log(response.args._blockNumber.toString());
-  	  	  	  console.log(response.args._totalMinedWei.toString());
-		  });
-	  });
   },
 
   calculateMinimumDifficultyWei: function(CurrentDifficulty) {

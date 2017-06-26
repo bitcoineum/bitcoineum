@@ -279,9 +279,7 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
       // nobody has been mining etc.
       // Will let us recover the network even if the
       // difficulty spikes to some absurd amount
-      LogEvent("Mine function start");
       adjust_difficulty();
-      LogEvent("Adjusted Difficulty");
       uint internalBlockNum = external_to_internal_block_number(block.number);
 
       miningAttempts[internalBlockNum][msg.sender] =
