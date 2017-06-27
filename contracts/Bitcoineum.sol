@@ -14,16 +14,20 @@ contract Bitcoineum is ERC20Mineable {
  string public constant symbol = "BTE";
  uint public constant decimals = 8;
  uint public constant INITIAL_SUPPLY = 0;
- uint public constant MAX_SUPPLY = 21000000;
+
+ // 21 Million coins at 8 decimal places
+ uint public constant MAX_SUPPLY = 21000000 * (10**8);
  
  function Bitcoineum() {
 
     totalSupply = INITIAL_SUPPLY;
     maximumSupply = MAX_SUPPLY;
 
-    // 0.001 Ether per block
-    currentDifficultyWei = 100 finney;
-    minimumDifficultyThresholdWei = 100 finney;
+    // 0.0001 Ether per block
+    // Difficulty is so low because it doesn't include
+    // gas prices for execution
+    currentDifficultyWei = 100 szabo;
+    minimumDifficultyThresholdWei = 100 szabo;
     
     // Genesis block
     blockNumber = 1;
@@ -42,6 +46,8 @@ contract Bitcoineum is ERC20Mineable {
 
     totalWeiExpected = difficultyAdjustmentPeriod * currentDifficultyWei;
 
+    // Balance of this address can be used to determine total burned value
+    // not including fees spent.
     burnAddress = 0xdeaDDeADDEaDdeaDdEAddEADDEAdDeadDEADDEaD;
 
     lastDifficultyAdjustmentEthereumBlock = block.number; 

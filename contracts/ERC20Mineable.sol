@@ -96,12 +96,8 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    // Utility related
 
    function external_to_internal_block_number(uint _externalBlockNum) public constant returns (uint) {
-      return SafeMath.div(_externalBlockNum, blockCreationRate); 
-   }
-
-   function calculate_maturation_block(uint _externalBlockNum) public constant returns (uint) {
-      uint internalBlock = external_to_internal_block_number(_externalBlockNum);
-      return targetBlockNumber(internalBlock);
+      // blockCreationRate is > 0
+      return _externalBlockNum / blockCreationRate;
    }
 
    // Initial state related
@@ -111,9 +107,10 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    * rather than scattering it across multiple public calls
    * also returns the current blocks parameters
    * or default params if it hasn't been created yet
+   * This is only called externally
    */
 
-   function getContractState() public constant
+   function getContractState() external constant
      returns (uint,  // currentDifficultyWei
               uint,  // minimumDifficultyThresholdWei
               uint,  // blockNumber
@@ -210,10 +207,18 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    modifier isValidAttempt() {
      // If the Ether for this mining attempt is less than minimum
      // 0.001 % of total difficulty
-     uint minimum_wei = SafeMath.div(currentDifficultyWei, 1000); 
+     uint minimum_wei = currentDifficultyWei / 1000000; 
      if (msg.value < minimum_wei) {
         throw;
      }
+
+     // Let's bound the value to guard against potential overflow
+     // i.e max int, or an underflow bug
+     // This is a single attempt
+     if (msg.value > (1000000 ether)) {
+        throw;
+     }
+
      _;
    }
 
@@ -250,9 +255,9 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    }
 
    event MiningAttemptEvent(
-       address _from,
+       address indexed _from,
        uint _value,
-       uint _blockNumber,
+       uint indexed _blockNumber,
        uint _totalMinedWei,
        uint _targetDifficultyWei
    );
@@ -268,12 +273,14 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    */
 
    function mine() external payable 
+                           onlyPayloadSize(0) // Extra precaution
                            nonReentrant
                            isValidAttempt
                            isMiningActive
                            initBlock(external_to_internal_block_number(block.number))
                            blockRedeemed(external_to_internal_block_number(block.number))
-                           alreadyMined(external_to_internal_block_number(block.number), msg.sender) returns (bool) {
+                           alreadyMined(external_to_internal_block_number(block.number),
+                           msg.sender) returns (bool) {
       // Let's immediately adjust the difficulty
       // In case an abnormal period of time has elapsed
       // nobody has been mining etc.
@@ -352,16 +359,17 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
 
       // normalize the value against the entire key space
       // Multiply it out because we do not have floating point
-      // 10000 is .0001 % increments
+      // 1000000 is .000001 % increments
 
-      uint256 intermediate = ((value * 10000) / selectedDifficultyWei);
+      uint256 intermediate = ((value * 1000000) / selectedDifficultyWei);
       uint256 max_int = 0;
       // Underflow to maxint
       max_int = max_int - 1;
-      if (intermediate >= 10000) {
+
+      if (intermediate >= 1000000) {
          return max_int;
       } else {
-         return intermediate * (max_int / 10000);
+         return intermediate * (max_int / 1000000);
       }
    }
 
@@ -389,8 +397,8 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
 
       // Again we have to do this iteratively because of floating
       // point limitations in solidity.
-      uint total_reward = 50;
-      for (uint i=0; i < (mined_block_period / 210000); i++) {
+      uint total_reward = 50 * (10 ** 8); // 8 Decimals
+      for (uint i=1; i < (mined_block_period / 210000); i++) {
           total_reward = total_reward / 2;
       }
       return total_reward;
@@ -436,28 +444,33 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
 
    event BlockClaimedEvent(
        address indexed _from,
+       address indexed _forCreditTo,
        uint _reward,
-       uint _blockNumber
+       uint indexed _blockNumber
    );
+
+   modifier onlyWinner(uint _blockNumber) {
+      if (!checkWinning(_blockNumber)) {
+         throw;
+         }
+      _;
+   }
 
    /** 
    * @dev Claim the mining reward for a given block
    * @param _blockNumber The internal block that the user is trying to claim
+   * @param forCreditTo When the miner account is different from the account
+   * where we want to deliver the redeemed Bitcoineum. I.e Hard wallet.
    */
-   function claim(uint _blockNumber)
+   function claim(uint _blockNumber, address forCreditTo)
+                  onlyPayloadSize(2 * 32)  //extra precaution
                   nonReentrant
                   blockRedeemed(_blockNumber)
                   isBlockMature(_blockNumber)
                   isBlockReadable(_blockNumber)
-                  userMineAttempted(_blockNumber, msg.sender) external returns (bool) {
-      // If this block has not been redeemed, we need to check if
-      // the caller is the winner
-      bool didWin = checkWinning(_blockNumber);
-      if (!didWin) {
-          // The user did not win exit immediately.
-          throw;
-      }
-
+                  userMineAttempted(_blockNumber, msg.sender)
+                  onlyWinner(_blockNumber)
+                  external returns (bool) {
       // If attempt is valid, invalidate redemption
       // Difficulty is adjusted here
       // and on bidding, in case bidding stalls out for some
@@ -467,12 +480,18 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
       blockData[_blockNumber].payee = msg.sender;
       totalBlocksMined = totalBlocksMined + 1;
       adjust_difficulty();
-      balances[msg.sender] = balances[msg.sender].add(calculate_mining_reward());
-      totalSupply += calculate_mining_reward();
-      BlockClaimedEvent(msg.sender, calculate_mining_reward(), _blockNumber);
+
+      uint reward = calculate_mining_reward();
+
+      balances[forCreditTo] = balances[forCreditTo].add(reward);
+      
+      totalSupply += reward;
+      BlockClaimedEvent(msg.sender, forCreditTo,
+                        reward,
+                        _blockNumber);
       // Mining rewards should show up as ERC20 transfer events
       // So that ERC20 scanners will see token creation.
-      Transfer(this, msg.sender, calculate_mining_reward());
+      Transfer(this, forCreditTo, reward);
       return true;
    }
 
@@ -551,7 +570,6 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
      return false;
      
    }
-
 
 }
 
