@@ -29,9 +29,6 @@ contract Bitcoineum is ERC20Mineable {
     currentDifficultyWei = 100 szabo;
     minimumDifficultyThresholdWei = 100 szabo;
     
-    // Genesis block
-    blockNumber = 1;
-
     // Ethereum blocks to internal blocks
     blockCreationRate = 10;
 
@@ -42,6 +39,7 @@ contract Bitcoineum is ERC20Mineable {
 
     rewardAdjustmentPeriod = 210000;
 
+    // This is the effective block counter, since block windows are discontinuous
     totalBlocksMined = 0;
 
     totalWeiExpected = difficultyAdjustmentPeriod * currentDifficultyWei;
