@@ -46,14 +46,17 @@ class BitcoineumBlock {
 
 class BitcoineumMiner {
 
-	constructor(miningAccount) {
-		console.log("Initializing Bitcoineum Miner...");
-		console.log("Using mining account: " + miningAccount);
+	constructor(miningAccount, logFun) {
+		var self = this;
+		logFun ? this.logger = logFun : this.logger = console.log;
+		self.logger("Initializing Bitcoineum Miner...");
+		self.logger("Using mining account: " + miningAccount);
 		this.bitcoineum_contract = contract(bitcoineum_artifacts);
 		this.bitcoineum_contract.setProvider(web3.currentProvider);
 		this.mining_account = miningAccount;
 		this.credit_account = miningAccount;
-		console.log("Credit mining rewards to: " + this.credit_account);
+		this.debug = false;
+		self.logger("Credit mining rewards to: " + this.credit_account);
 		this.auto_mine = false;
 
 		this.tracked_blocks = {};
@@ -77,6 +80,13 @@ class BitcoineumMiner {
 
 		this.minimumMineAttempt = null;
 
+		// Max total spend across all minining attempts
+		// 0.5 Ether limit unless specifically modified
+		// Caps max loss
+
+		this.maximumSpend = web3.toWei(0.5, 'ether');
+		this.spend = web3.toWei(0, 'ether');
+
 		// Bet limiter
 		// If the bet is exceeded we cap the bet, and turn disable auto mine
 		this.maxAttemptValue = web3.toWei('100', 'finney');
@@ -94,31 +104,85 @@ class BitcoineumMiner {
 
 	}
 
+	set_mining_account(miningAccount) {
+		if (web3.isAddress(miningAccount)) {
+			this.mining_account = miningAccount;
+			this.logger("New mining account: " + this.mining_account);
+		} else {
+			this.logger("Invalid Ethereum account.");
+		}
+	}
+
+	set_credit_account(creditAccount) {
+		if (web3.isAddress(creditAccount)) {
+			this.credit_account = creditAccount;
+			this.logger("New credit to account: " + this.credit_account);
+		} else {
+			this.logger("Invalid Ethereum account.");
+		}
+	}
+
+	set_max_spend_value(value) {
+		this.maximumSpend = value;
+	}
+
+	set_max_attempt_value(value) {
+		// Probably should do some validation on this number
+		this.maxAttemptValue = value;
+	}
+
+	set_attempt_percentage(value) {
+		if (value > 0 && value < 1) {
+			this.attemptPercentage = value;
+			this.logger("Percentage set to: " + value + "(" + value*100 + "%)");
+		} else {
+			this.logger("Percentage must be expressed between 0 and 1");
+		}
+	}
+
 	autoMine() { 
-		console.log("Max attempt: " + web3.fromWei(this.maxAttemptValue, 'ether') + ' ether');
-		console.log("Attempt %: " + (this.attemptPercentage * 100) + "%");
+		var self = this;
 		let x = this.calculateAttemptValue();
-		console.log("Attempt value: " + web3.fromWei(x, 'ether') + ' ether');
-		this.auto_mine = !this.auto_mine };
+		this.auto_mine = !this.auto_mine 
+		if (this.auto_mine) {
+			// Reset the max spend counter
+			self.spend = 0;
+			self.logger("Auto mining enabled");
+			self.logger("Attempt value: " + web3.fromWei(x, 'ether') + ' ether');
+			self.logger("Max attempt: " + web3.fromWei(this.maxAttemptValue, 'ether') + ' ether');
+			self.logger("Attempt %: " + (this.attemptPercentage * 100) + "%");
+		} else {
+			self.logger("Auto mining disabled");
+		}
+	}
+
+	toggleDebug() {
+		this.debug = !this.debug;
+		if (this.debug) {
+			this.logger("debugging enabled")
+		} else {
+			this.logger("debugging disabled");
+		}
+	}
 
 	waitForSync() {
 		var self = this;
-		console.log("Waiting for sync...");
+		self.logger("Waiting for sync...");
         web3.eth.getSyncing(function(error, sync){
             if(!error) {
                 if(sync === true) {
                    web3.reset(true);
                 } else if(sync) {
-                   console.log("Syncing: " + sync.startingBlock + " => " + sync.currentBlock + " => " + sync.highestBlock);
+                   self.logger("Syncing: " + sync.startingBlock + " => " + sync.currentBlock + " => " + sync.highestBlock);
                    setTimeout(function() {
                    	   self.waitForSync();
 				   }, 2500)
                 } else {
                 	web3.eth.getBlock('latest', function(err, Block) {
                 		if (err != null) {
-							console.log("There was an error getting the latest block");
-							console.log("Try reloading");
-							console.log(err);
+							self.logger("There was an error getting the latest block");
+							self.logger("Try reloading");
+							self.logger(err);
 							return;
 						} else {
                 			self.initializeState(Block.number);
@@ -126,7 +190,7 @@ class BitcoineumMiner {
 					});
                 }
             } else {
-            	 console.log(error);
+            	 self.logger(error);
 		    }
         });
 	}
@@ -134,7 +198,7 @@ class BitcoineumMiner {
 	syncStatusChange() {
 		var self = this;
 		web3.eth.isSyncing(function(Sync) {
-			console.log("Syncing state transition...");
+			self.logger("Syncing state transition...");
 		});
 
 	}
@@ -204,20 +268,30 @@ class BitcoineumMiner {
 
 	printStats() {
         var self = this;
-		console.log("Miner State");
-		console.log("-------------------");
-		console.log("Block Number: " + self.blockNumber);
-		console.log("Minimum threshold Wei: " + self.minimumDifficultyThresholdWei + " (" + web3.fromWei(self.minimumDifficultyThresholdWei, 'ether') + " ether)");
-		console.log("Minimum mining attempt Wei: " + self.minimumMineAttempt + " (" + web3.fromWei(self.minimumMineAttempt, 'ether') + " ether)");
-		console.log("Block creation rate: " + self.blockCreationRate);
-		console.log("Difficulty adjustment period: " + self.difficultyAdjustmentPeriod);
-		console.log("Last Ethereum block adjustment: " + self.lastDifficultyAdjustmentEthereumBlock);
-		console.log("Total blocks mined: " + self.totalBlocksMined);
-		console.log("Total wei committed for mining period: " + self.totalWeiCommitted + " (" + web3.fromWei(self.totalWeiCommitted, 'ether') + " ether)");
-		console.log("Total wei expected for mining period: " + self.totalWeiExpected + " (" + web3.fromWei(self.totalWeiExpected, 'ether') + " ether)");
-		console.log("-------------------");
+		self.logger("Miner State");
+		self.logger("-------------------");
+		self.logger("Block Number: " + self.blockNumber);
+		self.logger("Minimum threshold Wei: " + self.minimumDifficultyThresholdWei + " (" + web3.fromWei(self.minimumDifficultyThresholdWei, 'ether') + " ether)");
+		self.logger("Minimum mining attempt Wei: " + self.minimumMineAttempt + " (" + web3.fromWei(self.minimumMineAttempt, 'ether') + " ether)");
+		self.logger("Block creation rate: " + self.blockCreationRate);
+		self.logger("Difficulty adjustment period: " + self.difficultyAdjustmentPeriod);
+		self.logger("Last Ethereum block adjustment: " + self.lastDifficultyAdjustmentEthereumBlock);
+		self.logger("Total blocks mined: " + self.totalBlocksMined);
+		self.logger("Total wei committed for mining period: " + self.totalWeiCommitted + " (" + web3.fromWei(self.totalWeiCommitted, 'ether') + " ether)");
+		self.logger("Total wei expected for mining period: " + self.totalWeiExpected + " (" + web3.fromWei(self.totalWeiExpected, 'ether') + " ether)");
+		self.logger("-------------------");
 	}
 
+	printConfig() {
+		var self = this;
+		self.logger("Miner configuration parameters");
+		self.logger("------------------------------");
+		self.logger("Mining Account: " + self.mining_account);
+		self.logger("For credit to: " + self.credit_account);
+		self.logger("Maximum attempt value: " + self.maxAttemptValue + " (" + web3.fromWei(self.maxAttemptValue, 'ether') + " ether)");
+		self.logger("Maximum attempt percentage: " + self.attemptPercentage * 100 + "%");
+		self.logger("------------------------------");
+	}
 
 	subscribeBlockWatching() {
 		var self = this;
@@ -241,7 +315,7 @@ class BitcoineumMiner {
           }
         });
       this.blocks.start().then((started) => {
-      		  console.log (started ? 'Block watch started' : 'Block watch already running');
+      		  self.logger (started ? 'Block watch started' : 'Block watch already running');
 	  }).catch(console.error);
 	}
 
@@ -251,9 +325,13 @@ class BitcoineumMiner {
   	  this.bitcoineum_contract.deployed().then(function(instance) {
   	  	  bte = instance;
   	  	  var event = bte.MiningAttemptEvent({fromBlock: currentBlock});
-  	  	  console.log("Watching mining attempts from block: " + (currentBlock));
+  	  	  self.logger("Watching mining attempts from block: " + (currentBlock));
   	  	  event.watch(function(error, response) {
-  	  	  	  console.log("Mine attempt: [" +  response.args._blockNumber.toString() + "][" + response.args._from + "][" + response.args._value.toString() + "][" + response.args._totalMinedWei.toString() + "]");
+  	  	  	  // This could easily be extended to emit events via registered functions
+  	  	  	  // to create an extended interface
+  	  	  	  if (self.debug) {
+  	  	  	  	  self.logger("Mine attempt: [" +  response.args._blockNumber.toString() + "][" + response.args._from + "][" + response.args._value.toString() + "][" + response.args._totalMinedWei.toString() + "]");
+			  }
 		  });
 	  });
 	}
@@ -264,9 +342,11 @@ class BitcoineumMiner {
   	  this.bitcoineum_contract.deployed().then(function(instance) {
   	  	  bte = instance;
   	  	  var event = bte.BlockClaimedEvent({fromBlock: currentBlock});
-  	  	  console.log("Debug: Watching reward claims from block: " + (currentBlock));
+  	  	  self.logger("Debug: Watching reward claims from block: " + (currentBlock));
   	  	  event.watch(function(error, response) {
-  	  	  console.log("Block Claimed: [" +  response.args._blockNumber.toString() + "][" + response.args._from + "][" + response.args._forCreditTo + "][" + response.args._reward.toString() + "]");
+  	  	  	  if (self.debug) {
+  	  	  	  	  self.logger("Block Claimed: [" +  response.args._blockNumber.toString() + "][" + response.args._from + "][" + response.args._forCreditTo + "][" + response.args._reward.toString() + "]");
+			  }
 		  });
 	  });
 	}
@@ -278,7 +358,7 @@ class BitcoineumMiner {
   	  	  bte = instance;
   	  	  var event = bte.LogEvent({fromBlock: currentBlock});
   	  	  event.watch(function(error, response) {
-  	  	  	  console.log("Log " + response.args._info.toString());
+  	  	  	  self.logger("Log " + response.args._info.toString());
 		  });
 	  });
 	}
@@ -291,7 +371,7 @@ class BitcoineumMiner {
 			                    blockTargetDifficultyWei,
 			                    blockTotalMiningWei,
 			                    blockCurrentAttemptOffset);
-		console.log("Initial Bitcoineum block: " + self.blockNumber + "(" + self.external_block + ")");
+		self.logger("Initial Bitcoineum block: " + self.blockNumber + "(" + self.external_block + ")");
 	}
 
 	addNewBlock(web3BlockData) {
@@ -318,17 +398,17 @@ class BitcoineumMiner {
 						    self.claim(previous_blocknum);
 						}
 					} else {
-						console.log ("Block window " + previous_blocknum + " [Missed]");
+						self.logger ("Block window " + previous_blocknum + " [Missed]");
 					}
 				});
 			} else {
-				console.log("Block window " + previous_blocknum + " [Closed] ");
+				self.logger("Block window " + previous_blocknum + " [Closed] ");
 			}
 			delete self.tracked_blocks[previous_blocknum];
 		}
 
 		self.tracked_blocks[self.blockNumber] = new BitcoineumBlock(self);
-		console.log("Block window " + self.blockNumber + " (" + self.external_block + ")[Open]");
+		self.logger("Block window " + self.blockNumber + " (" + self.external_block + ")[Open]");
 		// If we are auto mining, then kick off a mine attempt for this block
 		// given the miner parameters
 		if (self.auto_mine) {
@@ -368,7 +448,7 @@ class BitcoineumMiner {
 		var self = this;
 		let x = self.currentDifficultyWei.times(self.attemptPercentage);
 		if (x.greaterThan(self.maxAttemptValue)) {
-			console.log("Max difficulty exceeded bet, pausing auto mine.");
+			self.logger("Max difficulty exceeded bet, pausing auto mine.");
 			self.auto_mine = false;
 			x = self.maxAttemptValue;
 		}
@@ -382,17 +462,26 @@ class BitcoineumMiner {
 		var bte;
 		self.bitcoineum_contract.deployed().then(function(instance) {
 			bte = instance;
+			var attemptValue = self.calculateAttemptValue();
+			self.spend += attemptValue;
+			if (self.spend >= self.maximumSpend) {
+				// We have exceeded the max spend
+				// We may have pending redeems 
+				self.logger("Maximum spend exceeded, halting auto mine");
+				self.auto_mine = false;
+				return;
+			}
 			return bte.mine({from: self.mining_account,
 				             gas: 400000, //270000
 				             value: self.calculateAttemptValue() });
         }).then(function(Res) {
         	      // We won't get a result from the state modifying transaction
         	      // Have to wait for a mining attempt event
-        	      console.log("Block window " + self.blockNumber + " [Pending]");
+        	      self.logger("Block window " + self.blockNumber + " [Pending]");
         	      self.tracked_blocks[self.blockNumber].miningAttempted = true;
         }).catch(function(e) {
-        	console.log("Block window " + self.blockNumber + " [Error]");
-        	console.log(e);
+        	self.logger("Block window " + self.blockNumber + " [Error]");
+        	self.logger(e);
         });
 	}
 
@@ -402,7 +491,7 @@ class BitcoineumMiner {
 	// could mislead us.
 	// If the network says we won, then we can try and claim our prize
 	check(block_to_check, callbackFun) {
-		console.log("Block window " + block_to_check + " [Check] ");
+		self.logger("Block window " + block_to_check + " [Check] ");
 		var self = this;
 		var bte;
 		
@@ -416,13 +505,13 @@ class BitcoineumMiner {
 			} else {
 				// Default fun
         	    if (Result) {
-        	    	console.log("Block window " + block_to_check + " [Won!]");
+        	    	self.logger("Block window " + block_to_check + " [Won!]");
 			    } else {
-			    	console.log("Block window " + block_to_check + " [Lost]");
+			    	self.logger("Block window " + block_to_check + " [Lost]");
 			    }
 			}
         }).catch(function(e) {
-          console.log(e);
+          self.logger(e);
           self.setStatus("Block window " + block_to_check + " [Error]");
         });
 
@@ -443,9 +532,9 @@ class BitcoineumMiner {
 				             {from: self.mining_account,
 				             	 gas: 400000});
         }).then(function(Result) {
-        		console.log("Block window " + block_to_claim + " [Claimed]");
+        		self.logger("Block window " + block_to_claim + " [Claimed]");
         }).catch(function(e) {
-          console.log(e);
+          self.logger(e);
           self.setStatus("Block window " + block_to_claim + " [Claim Error]");
         });
 

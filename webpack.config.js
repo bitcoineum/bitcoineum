@@ -30,7 +30,9 @@ module.exports = {
 	},
   plugins: [
     new CopyWebpackPlugin([
-      { from: './app/index.html', to: "index.html" }
+      { from: './app/index.html', to: "index.html" },
+      { from: './app/stylesheets/simple-console.css', to: "stylesheets/simple-console.css" },
+
     ])
   ],
 
