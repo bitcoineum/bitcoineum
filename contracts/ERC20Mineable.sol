@@ -1,4 +1,4 @@
-pragma solidity ^0.4.11;
+pragma solidity ^0.4.13;
 
 import 'zeppelin-solidity/contracts/token/StandardToken.sol';
 import 'zeppelin-solidity/contracts/ReentrancyGuard.sol';
@@ -164,9 +164,7 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    // Mining Related
 
    modifier blockCreated(uint _blockNum) {
-     if (!blockData[_blockNum].isCreated) {
-       throw;
-     }
+     require(blockData[_blockNum].isCreated);
      _;
    }
 
@@ -175,13 +173,8 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
      /* Should capture if the blockdata is payed
      *  or if it does not exist in the blockData mapping
      */
-     if (!blockData[_blockNum].isCreated) {
-        throw;
-     }
-
-     if (blockData[_blockNum].payed) {
-        throw;
-     }
+     require(blockData[_blockNum].isCreated);
+     require(!blockData[_blockNum].payed);
      _;
    }
 
@@ -209,18 +202,13 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
      * 0.001 % of total difficulty
      */
      uint minimum_wei = currentDifficultyWei / 10000000; 
-     if (msg.value < minimum_wei) {
-        throw;
-     }
+     require (msg.value >= minimum_wei);
 
      /* Let's bound the value to guard against potential overflow
      * i.e max int, or an underflow bug
      * This is a single attempt
      */
-     if (msg.value > (1000000 ether)) {
-        throw;
-     }
-
+     require(msg.value <= (1000000 ether));
      _;
    }
 
@@ -229,18 +217,15 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
     /* We are only going to allow one mining attempt per block per account
     *  This prevents stuffing and make it easier for us to track boundaries
     */
-    if (checkMiningAttempt(blockNumber, sender)) {
-       // This user already made a mining attempt for this block
-       throw;
-    }
+    
+    // This user already made a mining attempt for this block
+    require(!checkMiningAttempt(blockNumber, sender));
     _;
    }
 
    modifier isMiningActive() {
-      if (totalSupply >= maximumSupply) {
-         // Mining is over
-         throw;
-      }
+      // Check if mining is over
+      require(totalSupply < maximumSupply);
       _;
    }
 
@@ -254,9 +239,7 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
       *  Even though it shouldn't matter, let's err on the side of
       *  caution and throw in case there is some invalid state.
       */
-      if (!ret) {
-          throw;
-      }
+      require (ret);
    }
 
    event MiningAttemptEvent(
@@ -323,22 +306,14 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    // Redemption Related
 
    modifier userMineAttempted(uint _blockNum, address _user) {
-      if (checkMiningAttempt(_blockNum, _user)) {
-         throw;
-      }
+      require(!checkMiningAttempt(_blockNum, _user));
       _;
    }
    
    modifier isBlockMature(uint _blockNumber) {
       require(_blockNumber != block.number);
-
-      if (!checkBlockMature(_blockNumber, block.number)) {
-         throw;
-      }
-
-      if (!checkRedemptionWindow(_blockNumber, block.number)) {
-         throw;
-      }
+      require(checkBlockMature(_blockNumber, block.number));
+      require(checkRedemptionWindow(_blockNumber, block.number));
       _;
    }
 
@@ -347,9 +322,7 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    modifier isBlockReadable(uint _blockNumber) {
       InternalBlock memory iBlock = blockData[_blockNumber];
       uint targetBlockNum = targetBlockNumber(_blockNumber);
-      if (block.blockhash(targetBlockNum) == 0) {
-         throw;
-      }
+      require(block.blockhash(targetBlockNum) != 0);
       _;
    }
 
@@ -387,11 +360,8 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
        * against the difficulty scale.
        * If they are not we might have an integer overflow
        */
-       if (offset + difficulty <  offset) {
-          throw;
-        }
-
-        return (offset, offset+difficulty);
+       require(offset + difficulty >= offset);
+       return (offset, offset+difficulty);
    }
 
    function calculate_mining_reward(uint256 _totalBlocksMined) public constant returns (uint) {
@@ -484,9 +454,7 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    );
 
    modifier onlyWinner(uint _blockNumber) {
-      if (!checkWinning(_blockNumber)) {
-         throw;
-         }
+      require(checkWinning(_blockNumber));
       _;
    }
 
