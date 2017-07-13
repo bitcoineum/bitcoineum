@@ -100,9 +100,18 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
 
    // Utility related
 
+   function current_external_block() public constant returns (uint256) {
+       return block.number;
+   }
+
    function external_to_internal_block_number(uint _externalBlockNum) public constant returns (uint) {
       // blockCreationRate is > 0
       return _externalBlockNum / blockCreationRate;
+   }
+
+   // For the test harness verification
+   function get_internal_block_number() public constant returns (uint256) {
+     return external_to_internal_block_number(current_external_block());
    }
 
    // Initial state related
@@ -131,7 +140,7 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
               uint  // b.currentAttemptOffset
               ) {
     InternalBlock memory b;
-    uint _blockNumber = external_to_internal_block_number(block.number);
+    uint _blockNumber = external_to_internal_block_number(current_external_block());
     if (!blockData[_blockNumber].isCreated) {
         b = InternalBlock(
                        {targetDifficultyWei: currentDifficultyWei,
@@ -169,7 +178,7 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    }
 
    modifier blockRedeemed(uint _blockNum) {
-     require(_blockNum != block.number);
+     require(_blockNum != current_external_block());
      /* Should capture if the blockdata is payed
      *  or if it does not exist in the blockData mapping
      */
@@ -179,7 +188,7 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    }
 
    modifier initBlock(uint _blockNum) {
-     require(_blockNum != block.number);
+     require(_blockNum != current_external_block());
 
      if (!blockData[_blockNum].isCreated) {
        // Create new block for tracking
@@ -213,7 +222,7 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    }
 
    modifier alreadyMined(uint blockNumber, address sender) {
-     require(blockNumber != block.number); 
+     require(blockNumber != current_external_block()); 
     /* We are only going to allow one mining attempt per block per account
     *  This prevents stuffing and make it easier for us to track boundaries
     */
@@ -264,9 +273,9 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
                            nonReentrant
                            isValidAttempt
                            isMiningActive
-                           initBlock(external_to_internal_block_number(block.number))
-                           blockRedeemed(external_to_internal_block_number(block.number))
-                           alreadyMined(external_to_internal_block_number(block.number),
+                           initBlock(external_to_internal_block_number(current_external_block()))
+                           blockRedeemed(external_to_internal_block_number(current_external_block()))
+                           alreadyMined(external_to_internal_block_number(current_external_block()),
                            msg.sender) returns (bool) {
       /* Let's immediately adjust the difficulty
       *  In case an abnormal period of time has elapsed
@@ -275,7 +284,7 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
       * difficulty spikes to some absurd amount
       */
       adjust_difficulty();
-      uint internalBlockNum = external_to_internal_block_number(block.number);
+      uint internalBlockNum = external_to_internal_block_number(current_external_block());
 
       miningAttempts[internalBlockNum][msg.sender] =
                      MiningAttempt({projectedOffset: blockData[internalBlockNum].currentAttemptOffset,
@@ -310,9 +319,9 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    }
    
    modifier isBlockMature(uint _blockNumber) {
-      require(_blockNumber != block.number);
-      require(checkBlockMature(_blockNumber, block.number));
-      require(checkRedemptionWindow(_blockNumber, block.number));
+      require(_blockNumber != current_external_block());
+      require(checkBlockMature(_blockNumber, current_external_block()));
+      require(checkRedemptionWindow(_blockNumber, current_external_block()));
       _;
    }
 
@@ -431,7 +440,7 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
       * mining attempts
       */
 
-      if ((block.number - lastDifficultyAdjustmentEthereumBlock) > (difficultyAdjustmentPeriod * blockCreationRate)) {
+      if ((current_external_block() - lastDifficultyAdjustmentEthereumBlock) > (difficultyAdjustmentPeriod * blockCreationRate)) {
 
           // Get the new total wei expected via static function
           totalWeiExpected = calculate_next_expected_wei(totalWeiCommitted, totalWeiExpected, minimumDifficultyThresholdWei, difficultyScaleMultiplierLimit);
@@ -440,7 +449,7 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
           totalWeiCommitted = 0;
 
           // Lets reset the difficulty adjustment block target
-          lastDifficultyAdjustmentEthereumBlock = block.number;
+          lastDifficultyAdjustmentEthereumBlock = current_external_block();
 
       }
    }
@@ -547,7 +556,7 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    * @param _blockNum is the internal block number to check
    */
    function checkWinning(uint _blockNum) constant public returns (bool) {
-     if (checkMiningAttempt(_blockNum, msg.sender) && checkBlockMature(_blockNum, block.number)) {
+     if (checkMiningAttempt(_blockNum, msg.sender) && checkBlockMature(_blockNum, current_external_block())) {
 
       InternalBlock memory iBlock = blockData[_blockNum];
       uint targetBlockNum = targetBlockNumber(iBlock.blockNumber);
