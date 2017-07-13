@@ -2,7 +2,7 @@ pragma solidity ^0.4.13;
 
 import 'zeppelin-solidity/contracts/token/StandardToken.sol';
 import 'zeppelin-solidity/contracts/ReentrancyGuard.sol';
-import 'zeppelin-solidity/contracts/SafeMath.sol';
+import 'zeppelin-solidity/contracts/math/SafeMath.sol';
 
 
 /**
@@ -261,7 +261,6 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    */
 
    function mine() external payable 
-                           onlyPayloadSize(0) // Extra precaution
                            nonReentrant
                            isValidAttempt
                            isMiningActive
@@ -465,7 +464,6 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    * where we want to deliver the redeemed Bitcoineum. I.e Hard wallet.
    */
    function claim(uint _blockNumber, address forCreditTo)
-                  onlyPayloadSize(2 * 32)  //extra precaution
                   nonReentrant
                   blockRedeemed(_blockNumber)
                   isBlockMature(_blockNumber)
