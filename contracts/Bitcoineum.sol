@@ -12,11 +12,11 @@ contract Bitcoineum is ERC20Mineable {
 
  string public constant name = "Bitcoineum";
  string public constant symbol = "BTE";
- uint public constant decimals = 8;
- uint public constant INITIAL_SUPPLY = 0;
+ uint256 public constant decimals = 8;
+ uint256 public constant INITIAL_SUPPLY = 0;
 
  // 21 Million coins at 8 decimal places
- uint public constant MAX_SUPPLY = 21000000 * (10**8);
+ uint256 public constant MAX_SUPPLY = 21000000 * (10**8);
  
  function Bitcoineum() {
 
@@ -49,7 +49,6 @@ contract Bitcoineum is ERC20Mineable {
     burnAddress = 0xdeaDDeADDEaDdeaDdEAddEADDEAdDeadDEADDEaD;
 
     lastDifficultyAdjustmentEthereumBlock = block.number; 
-    genesisBlock = block.number;
  }
 
  }

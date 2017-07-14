@@ -6,6 +6,18 @@ var BitcoineumMock = artifacts.require('./helpers/BitcoineumMock.sol');
 
 var BigNumber = require("bignumber.js");
 
+
+function awaitEvent(event, handler) {
+  return new Promise((resolve, reject) => {
+    function wrappedHandler(...args) {
+      Promise.resolve(handler(...args)).then(resolve).catch(reject);
+    }
+  
+    event.watch(wrappedHandler);
+  });
+}
+
+
 contract('BitcoineumTest', function(accounts) {
 
 
@@ -235,6 +247,14 @@ contract('BitcoineumTest', function(accounts) {
 
   // Let's use the mock Bitcoineum to test main functions
 
+
+	it('should mock Bitcoineum correctly', async function() {
+		let token = await BitcoineumMock.new();
+		let blockNumber = await token.get_internal_block_number();
+		assert.equal(blockNumber.valueOf(), 0);
+	});
+
+
 	it('should be able to set the block on the mock contract', async function() {
 		let token = await BitcoineumMock.new();
 		await token.set_block(10000);
@@ -245,4 +265,308 @@ contract('BitcoineumTest', function(accounts) {
 		assert.equal(internalBlockNumber, 1000);  // 1000th window
 	});
 
-});
+	describe('During mining operations', function() {
+
+	it('should let me attempt to mine', async function() {
+		let token = await BitcoineumMock.new();
+		await token.mine({from: accounts[0], value: web3.toWei('100', 'szabo')});
+		let totalWeiCommitted = await token.totalWeiCommitted();
+		assert.equal(totalWeiCommitted.toString(), web3.toWei('100', 'szabo'));
+	});
+
+	it('should not let me attempt to mine less than the minimum wei', async function() {
+		let token = await BitcoineumMock.new();
+		try  {
+			await token.mine({from: accounts[0], value: 100});
+		} catch(error) {
+			return assertJump(error);
+		}
+	});
+
+	it('should not let me mine more than the maximum attempt', async function() {
+		let token = await BitcoineumMock.new();
+		try {
+			await token.mine({from: accounts[0], value: web3.toWei('1000001', 'ether')});
+		} catch(error) {
+			return assertJump(error)
+		}	
+	});
+
+	it('should have mining active by default', async function() {
+		let token = await BitcoineumMock.new();
+		let flag = await token.checkMiningActive();
+		assert.equal(flag, true);
+	});
+
+	it('should ensure mining stops when maximum supply is reached', async function() {
+		let token = await BitcoineumMock.new();
+		await token.set_total_supply(21000000 * (10**8)+1);
+		try {
+			await token.mine({from: accounts[0], value: web3.toWei('100', 'szabo')});
+		} catch(error) {
+			return assertJump(error)
+		}
+	});
+
+	it('should create a block entry on mining attempt', async function() {
+		let token = await BitcoineumMock.new();
+		await token.mine({from: accounts[0], value: web3.toWei('100', 'szabo')});
+		let [targetDifficultyWei, blockNumber, totalMiningWei, totalMiningAttempts, currentAttemptOffset, payed, payee, isCreated] = await token.getBlockData(0);
+		// Let's verify defaults
+		assert.equal(targetDifficultyWei, web3.toWei('100', 'szabo'));
+		assert.equal(blockNumber, 0);
+		assert.equal(totalMiningWei, web3.toWei('100', 'szabo'));
+		assert.equal(totalMiningAttempts, 1);
+		assert.equal(currentAttemptOffset, web3.toWei('100', 'szabo'));
+		assert.equal(payed, false);
+		assert.equal(isCreated, true);
+	});
+
+	it('should not allow me to attempt to mine twice from the same address', async function() {
+		let token = await BitcoineumMock.new();
+		await token.mine({from: accounts[0], value: web3.toWei('100', 'szabo')});
+		try {
+			await token.mine({from: accounts[0], value: web3.toWei('100', 'szabo')});
+		} catch(error) {
+			return assertJump(error);
+		}
+	});
+
+	it('should increment mining attempts and attempt offset on sequential mining attempts', async function() {
+		let token = await BitcoineumMock.new();
+		await token.mine({from: accounts[0], value: web3.toWei('100', 'szabo')});
+		await token.mine({from: accounts[1], value: web3.toWei('100', 'szabo')});
+		await token.mine({from: accounts[2], value: web3.toWei('100', 'szabo')});
+		let [targetDifficultyWei, blockNumber, totalMiningWei, totalMiningAttempts, currentAttemptOffset, payed, payee, isCreated] = await token.getBlockData(0);
+		assert.equal(totalMiningAttempts, 3);
+		assert.equal(currentAttemptOffset, web3.toWei('300', 'szabo'));
+		assert.equal(totalMiningWei, web3.toWei('300', 'szabo'));
+	});
+
+
+	// Let's watch for the mining attempt event
+	
+	it('should generate mining attempt events', async function() {
+		let token = await BitcoineumMock.new();
+		let event = token.MiningAttemptEvent({});
+
+		let watcher = async function(err, result) {
+			event.stopWatching();
+			if (err) { throw err; }
+			assert.equal(result.args._from, accounts[0]);
+			assert.equal(result.args._value, web3.toWei('100', 'szabo'));
+			assert.equal(result.args._blockNumber, 0);
+			assert.equal(result.args._totalMinedWei, web3.toWei('100', 'szabo'));
+			assert.equal(result.args._targetDifficultyWei, web3.toWei('100', 'szabo'));
+		};
+		token.mine({from: accounts[0], value: web3.toWei('100', 'szabo')});
+		await awaitEvent(event, watcher);
+	});
+
+	});
+
+	describe('During claim/redemption operations', function() {
+
+		it('should not allow me to claim a non existing block', async function() {
+			let token = await BitcoineumMock.new();
+			try {
+				await token.claim(0, accounts[0]);
+			} catch(error) {
+				return assertJump(error);
+			}
+		});
+
+		it('should not allow me to claim a block that has not matured', async function() {
+			let token = await BitcoineumMock.new();
+			await token.mine({from: accounts[0], value: web3.toWei('100', 'szabo')});
+			await token.set_block(10);
+			try {
+				await token.claim(0, accounts[0]);
+			} catch(error) {
+				return assertJump(error);
+			}
+		});
+
+		it('should allow me to redeem a block that has matured', async function() {
+			let token = await BitcoineumMock.new();
+			await token.mine({from: accounts[0], value: web3.toWei('1', 'ether')});
+			await token.set_block(11);
+			let ret = await token.claim(0, accounts[0]);
+		});
+
+		it('should not allow me to redeem a block twice', async function() {
+			let token = await BitcoineumMock.new();
+			await token.mine({from: accounts[0], value: web3.toWei('1', 'ether')});
+			await token.set_block(11);
+			await token.claim(0, accounts[0]);
+			try {
+				await token.claim(0, accounts[0]);
+			} catch(error) {
+				return assertJump(error);
+			}
+		});
+
+		it('should not allow a third party to redeem a lost block', async function() {
+			let token = await BitcoineumMock.new();
+			await token.mine({from: accounts[0], value: web3.toWei('1', 'ether')});
+			await token.mine({from: accounts[1], value: web3.toWei('10', 'szabo')});
+			await token.set_block(11);
+			await token.claim(0, accounts[0]);
+			try {
+				await token.claim(0, accounts[0], {from: accounts[1]});
+			} catch(error) {
+				return assertJump(error);
+			}
+		});
+
+
+		it('show not allow me to redeem a block that I have not attempted to mine', async function() {
+			let token = await BitcoineumMock.new();
+			await token.mine({from: accounts[1], value: web3.toWei('1', 'ether')});
+			await token.set_block(11);
+			try {
+				await token.claim(0, accounts[0]);
+			} catch(error) {
+				return assertJump(error);
+			}
+
+		});
+
+		it('should not let me redeem a block that I lost', async function() {
+			let token = await BitcoineumMock.new();
+			await token.mine({from: accounts[1], value: web3.toWei('1', 'ether')});
+			await token.mine({from: accounts[0], value: web3.toWei('10', 'szabo')});
+			await token.set_block(11);
+			try {
+				await token.claim(0, accounts[0]);
+			} catch(error) {
+				return assertJump(error);
+			}
+		});
+
+		it('should let me redeem a block I won with multiple participants', async function() {
+			let token = await BitcoineumMock.new();
+			await token.mine({from: accounts[1], value: web3.toWei('10', 'szabo')});
+			await token.mine({from: accounts[2], value: web3.toWei('10', 'szabo')});
+			await token.mine({from: accounts[3], value: web3.toWei('10', 'szabo')});
+			await token.mine({from: accounts[4], value: web3.toWei('10', 'szabo')});
+			await token.mine({from: accounts[5], value: web3.toWei('10', 'szabo')});
+			await token.mine({from: accounts[6], value: web3.toWei('10', 'szabo')});
+			await token.mine({from: accounts[7], value: web3.toWei('10', 'szabo')});
+			await token.mine({from: accounts[8], value: web3.toWei('10', 'szabo')});
+			await token.mine({from: accounts[9], value: web3.toWei('10', 'szabo')});
+			await token.mine({from: accounts[0], value: web3.toWei('1', 'ether')});
+			await token.set_block(11);
+			let ret = await token.claim(0, accounts[0]);
+		});
+
+		it('should not let me redeem a block outside of the redemption window', async function() { 
+			let token = await BitcoineumMock.new();
+			await token.mine({from: accounts[0], value: web3.toWei('100', 'szabo')});
+			await token.set_block(100);
+			try {
+				await token.claim(0, accounts[0]);
+			} catch(error) {
+				return assertJump(error);
+			}
+		});
+
+	it('should generate claim and transfer events', async function() {
+		let token = await BitcoineumMock.new();
+		let claimedEvent = token.BlockClaimedEvent({});
+		let transferEvent = token.Transfer({});
+
+		let claimWatcher = async function(err, result) {
+			claimedEvent.stopWatching();
+			if (err) { throw err; }
+			assert.equal(result.args._from, accounts[0]);
+			assert.equal(result.args._forCreditTo, accounts[0]);
+			assert.equal(result.args._reward.valueOf(), 50 * (10**8)); 
+			assert.equal(result.args._blockNumber, 0);
+		};
+
+		let transferWatcher = async function(err, result) {
+			transferEvent.stopWatching();
+			if (err) { throw err; }
+			assert.equal(result.args.from, token.address);
+			assert.equal(result.args.to, accounts[0]);
+			assert.equal(result.args.value, 50 * (10**8));
+		};
+
+
+		await token.mine({from: accounts[0], value: web3.toWei('100', 'szabo')});
+		await token.set_block(100);
+		token.claim(0, accounts[0]);
+		await awaitEvent(claimedEvent, claimWatcher);
+		await awaitEvent(transferEvent, transferWatcher);
+	});
+
+	it('should let me verify winning status asynchronously', async function() {
+		let token = await BitcoineumMock.new();
+		await token.mine({from: accounts[0], value: web3.toWei('1', 'ether')});
+		await token.set_block(11);
+		let status = await token.checkWinning(0);
+		assert.equal(status, true);
+		status = await token.checkWinning(0, {from: accounts[1]});
+		assert.equal(status, false);
+	});
+
+		
+	it('should update my balance if I mine successfully', async function() {
+		let token = await BitcoineumMock.new();
+		await token.mine({from: accounts[0], value: web3.toWei('1', 'ether')});
+		await token.set_block(11);
+		await token.claim(0, accounts[0]);
+		let balance = await token.balanceOf(accounts[0]);
+		assert.equal(balance.valueOf(), 50*(10**8));
+	});
+
+	it('should update the total supply on claim event', async function() {
+		let token = await BitcoineumMock.new();
+		await token.mine({from: accounts[0], value: web3.toWei('1', 'ether')});
+		await token.set_block(11);
+		await token.claim(0, accounts[0]);
+		let totalSupply = await token.totalSupply();
+		assert.equal(totalSupply.valueOf(), 50*(10**8));
+		await token.set_blocks_mined(211000);
+		await token.set_block(1000);
+		await token.mine({from: accounts[0], value: web3.toWei('1', 'ether')});
+		await token.set_block(1011);
+		await token.claim(100, accounts[0]);
+		totalSupply = await token.totalSupply();
+		assert.equal(totalSupply.valueOf(), 50*(10**8) + 25*(10**8));
+	});
+
+
+	it('should adjust the reward based on blocks mined/claimed', async function() {
+		let token = await BitcoineumMock.new();
+		await token.set_blocks_mined(211000);
+		await token.mine({from: accounts[0], value: web3.toWei('1', 'ether')});
+		await token.set_block(11);
+		await token.claim(0, accounts[0]);
+		let balance = await token.balanceOf(accounts[0]);
+		assert.equal(balance.valueOf(), 25*(10**8));
+		await token.set_blocks_mined(422000);
+		await token.set_block(1000);
+		await token.mine({from: accounts[0], value: web3.toWei('1', 'ether')});
+		await token.set_block(1011);
+		await token.claim(100, accounts[0]);
+		balance = await token.balanceOf(accounts[0]);
+		assert.equal(balance.valueOf(), 25*(10**8) + 12.5*(10**8));
+		await token.set_blocks_mined(633000);
+		await token.set_block(2000);
+		await token.mine({from: accounts[0], value: web3.toWei('1', 'ether')});
+		await token.set_block(2011);
+		await token.claim(200, accounts[0]);
+		balance = await token.balanceOf(accounts[0]);
+		assert.equal(balance.valueOf(), 25*(10**8) + 12.5*(10**8) + 6.25*(10**8));
+	});
+
+	});
+
+	describe('During difficulty adjustments', function() {
+
+
+	});
+
+	});

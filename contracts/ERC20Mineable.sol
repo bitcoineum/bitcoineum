@@ -18,49 +18,44 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    * maximumSupply refers to the cap on mining.
    * When mining is finished totalSupply == maximumSupply
    */
-   uint public maximumSupply;
+   uint256 public maximumSupply;
 
    // Current mining difficulty in Wei
-   uint public currentDifficultyWei;
+   uint256 public currentDifficultyWei;
 
    // Minimum difficulty
-   uint public minimumDifficultyThresholdWei;
+   uint256 public minimumDifficultyThresholdWei;
 
    /** Block creation rate as number of Ethereum blocks per mining cycle
    * 10 minutes at 17 seconds a block would be an internal block
    * generated every 35 Ethereum blocks
    */
-   uint public blockCreationRate;
+   uint256 public blockCreationRate;
 
    /* difficultyAdjustmentPeriod should be every two weeks, or
    * 2016 internal blocks.
    */
-   uint public difficultyAdjustmentPeriod;
+   uint256 public difficultyAdjustmentPeriod;
 
    /* When was the last time we did a difficulty adjustment.
    * In case mining ceases for indeterminate duration
    */
-   uint public lastDifficultyAdjustmentEthereumBlock;
+   uint256 public lastDifficultyAdjustmentEthereumBlock;
 
    // Scale multiplier limit for difficulty adjustment
-   uint public constant difficultyScaleMultiplierLimit = 4;
+   uint256 public constant difficultyScaleMultiplierLimit = 4;
 
    // Total blocks mined helps us calculate the current reward
-   uint public totalBlocksMined;
+   uint256 public totalBlocksMined;
 
    // Reward adjustment period in Bitcoineum native blocks
 
-   uint public rewardAdjustmentPeriod; 
+   uint256 public rewardAdjustmentPeriod; 
 
    // Total amount of Wei put into mining during current period
-   uint public totalWeiCommitted;
+   uint256 public totalWeiCommitted;
    // Total amount of Wei expected for this mining period
-   uint public totalWeiExpected;
-
-   /* The block when the contract goes active
-   *  So we can calculate the internal block correctly
-   */
-   uint genesisBlock;
+   uint256 public totalWeiExpected;
 
    // Where to burn Ether
    address public burnAddress;
@@ -71,11 +66,11 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    */
 
    struct InternalBlock {
-      uint targetDifficultyWei;
-      uint blockNumber;
-      uint totalMiningWei;
-      uint totalMiningAttempts;
-      uint currentAttemptOffset;
+      uint256 targetDifficultyWei;
+      uint256 blockNumber;
+      uint256 totalMiningWei;
+      uint256 totalMiningAttempts;
+      uint256 currentAttemptOffset;
       bool payed;
       address payee;
       bool isCreated;
@@ -89,22 +84,26 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    * wei from a single miner increase overlap
    */
    struct MiningAttempt {
-      uint projectedOffset;
-      uint value;
+      uint256 projectedOffset;
+      uint256 value;
       bool isCreated;
    }
 
    // Each guess gets assigned to a block
-   mapping (uint => InternalBlock) public blockData;
-   mapping (uint => mapping (address => MiningAttempt)) public miningAttempts;
+   mapping (uint256 => InternalBlock) public blockData;
+   mapping (uint256 => mapping (address => MiningAttempt)) public miningAttempts;
 
    // Utility related
+
+   function resolve_block_hash(uint256 _blockNum) public constant returns (bytes32) {
+       return block.blockhash(_blockNum);
+   }
 
    function current_external_block() public constant returns (uint256) {
        return block.number;
    }
 
-   function external_to_internal_block_number(uint _externalBlockNum) public constant returns (uint) {
+   function external_to_internal_block_number(uint256 _externalBlockNum) public constant returns (uint256) {
       // blockCreationRate is > 0
       return _externalBlockNum / blockCreationRate;
    }
@@ -125,22 +124,22 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    */
 
    function getContractState() external constant
-     returns (uint,  // currentDifficultyWei
-              uint,  // minimumDifficultyThresholdWei
-              uint,  // blockNumber
-              uint,  // blockCreationRate
-              uint,  // difficultyAdjustmentPeriod
-              uint,  // rewardAdjustmentPeriod
-              uint,  // lastDifficultyAdustmentEthereumBlock
-              uint,  // totalBlocksMined
-              uint,  // totalWeiCommitted
-              uint,  // totalWeiExpected
-              uint,  // b.targetDifficultyWei
-              uint,  // b.totalMiningWei
-              uint  // b.currentAttemptOffset
+     returns (uint256,  // currentDifficultyWei
+              uint256,  // minimumDifficultyThresholdWei
+              uint256,  // blockNumber
+              uint256,  // blockCreationRate
+              uint256,  // difficultyAdjustmentPeriod
+              uint256,  // rewardAdjustmentPeriod
+              uint256,  // lastDifficultyAdustmentEthereumBlock
+              uint256,  // totalBlocksMined
+              uint256,  // totalWeiCommitted
+              uint256,  // totalWeiExpected
+              uint256,  // b.targetDifficultyWei
+              uint256,  // b.totalMiningWei
+              uint256  // b.currentAttemptOffset
               ) {
     InternalBlock memory b;
-    uint _blockNumber = external_to_internal_block_number(current_external_block());
+    uint256 _blockNumber = external_to_internal_block_number(current_external_block());
     if (!blockData[_blockNumber].isCreated) {
         b = InternalBlock(
                        {targetDifficultyWei: currentDifficultyWei,
@@ -170,14 +169,26 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
             b.currentAttemptOffset);
    }
 
+   function getBlockData(uint256 _blockNum) public constant returns (uint256, uint256, uint256, uint256, uint256, bool, address, bool) {
+    InternalBlock memory iBlock = blockData[_blockNum];
+    return (iBlock.targetDifficultyWei,
+    iBlock.blockNumber,
+    iBlock.totalMiningWei,
+    iBlock.totalMiningAttempts,
+    iBlock.currentAttemptOffset,
+    iBlock.payed,
+    iBlock.payee,
+    iBlock.isCreated);
+   }
+
    // Mining Related
 
-   modifier blockCreated(uint _blockNum) {
+   modifier blockCreated(uint256 _blockNum) {
      require(blockData[_blockNum].isCreated);
      _;
    }
 
-   modifier blockRedeemed(uint _blockNum) {
+   modifier blockRedeemed(uint256 _blockNum) {
      require(_blockNum != current_external_block());
      /* Should capture if the blockdata is payed
      *  or if it does not exist in the blockData mapping
@@ -187,7 +198,7 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
      _;
    }
 
-   modifier initBlock(uint _blockNum) {
+   modifier initBlock(uint256 _blockNum) {
      require(_blockNum != current_external_block());
 
      if (!blockData[_blockNum].isCreated) {
@@ -208,9 +219,9 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
 
    modifier isValidAttempt() {
      /* If the Ether for this mining attempt is less than minimum
-     * 0.001 % of total difficulty
+     * 0.0000001 % of total difficulty
      */
-     uint minimum_wei = currentDifficultyWei / 10000000; 
+     uint256 minimum_wei = currentDifficultyWei / 10000000; 
      require (msg.value >= minimum_wei);
 
      /* Let's bound the value to guard against potential overflow
@@ -221,7 +232,7 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
      _;
    }
 
-   modifier alreadyMined(uint blockNumber, address sender) {
+   modifier alreadyMined(uint256 blockNumber, address sender) {
      require(blockNumber != current_external_block()); 
     /* We are only going to allow one mining attempt per block per account
     *  This prevents stuffing and make it easier for us to track boundaries
@@ -232,13 +243,16 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
     _;
    }
 
+   function checkMiningActive() public constant returns (bool) {
+      return (totalSupply < maximumSupply);
+   }
+
    modifier isMiningActive() {
-      // Check if mining is over
-      require(totalSupply < maximumSupply);
+      require(checkMiningActive());
       _;
    }
 
-   function burn(uint value) internal {
+   function burn(uint256 value) internal {
       /* We don't really care if the burn fails for some
       *  weird reason.
       */
@@ -253,10 +267,10 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
 
    event MiningAttemptEvent(
        address indexed _from,
-       uint _value,
-       uint indexed _blockNumber,
-       uint _totalMinedWei,
-       uint _targetDifficultyWei
+       uint256 _value,
+       uint256 indexed _blockNumber,
+       uint256 _totalMinedWei,
+       uint256 _targetDifficultyWei
    );
 
    event LogEvent(
@@ -275,8 +289,7 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
                            isMiningActive
                            initBlock(external_to_internal_block_number(current_external_block()))
                            blockRedeemed(external_to_internal_block_number(current_external_block()))
-                           alreadyMined(external_to_internal_block_number(current_external_block()),
-                           msg.sender) returns (bool) {
+                           alreadyMined(external_to_internal_block_number(current_external_block()), msg.sender) returns (bool) {
       /* Let's immediately adjust the difficulty
       *  In case an abnormal period of time has elapsed
       *  nobody has been mining etc.
@@ -284,7 +297,7 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
       * difficulty spikes to some absurd amount
       */
       adjust_difficulty();
-      uint internalBlockNum = external_to_internal_block_number(current_external_block());
+      uint256 internalBlockNum = external_to_internal_block_number(current_external_block());
 
       miningAttempts[internalBlockNum][msg.sender] =
                      MiningAttempt({projectedOffset: blockData[internalBlockNum].currentAttemptOffset,
@@ -313,12 +326,12 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
 
    // Redemption Related
 
-   modifier userMineAttempted(uint _blockNum, address _user) {
-      require(!checkMiningAttempt(_blockNum, _user));
+   modifier userMineAttempted(uint256 _blockNum, address _user) {
+      require(checkMiningAttempt(_blockNum, _user));
       _;
    }
    
-   modifier isBlockMature(uint _blockNumber) {
+   modifier isBlockMature(uint256 _blockNumber) {
       require(_blockNumber != current_external_block());
       require(checkBlockMature(_blockNumber, current_external_block()));
       require(checkRedemptionWindow(_blockNumber, current_external_block()));
@@ -327,19 +340,19 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
 
    // Just in case this block falls outside of the available
    // block range, possibly because of a change in network params
-   modifier isBlockReadable(uint _blockNumber) {
+   modifier isBlockReadable(uint256 _blockNumber) {
       InternalBlock memory iBlock = blockData[_blockNumber];
-      uint targetBlockNum = targetBlockNumber(_blockNumber);
-      require(block.blockhash(targetBlockNum) != 0);
+      uint256 targetBlockNum = targetBlockNumber(_blockNumber);
+      require(resolve_block_hash(targetBlockNum) != 0);
       _;
    }
 
-   function calculate_difficulty_attempt(uint targetDifficultyWei,
-                                         uint totalMiningWei,
-                                         uint value) public constant returns (uint256) {
+   function calculate_difficulty_attempt(uint256 targetDifficultyWei,
+                                         uint256 totalMiningWei,
+                                         uint256 value) public constant returns (uint256) {
       // The total amount of Wei sent for this mining attempt exceeds the difficulty level
       // So the calculation of percentage keyspace should be done on the total wei.
-      uint selectedDifficultyWei = 0;
+      uint256 selectedDifficultyWei = 0;
       if (totalMiningWei > targetDifficultyWei) {
          selectedDifficultyWei = totalMiningWei;
       } else {
@@ -363,7 +376,7 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
       }
    }
 
-   function calculate_range_attempt(uint difficulty, uint offset) public constant returns (uint, uint) {
+   function calculate_range_attempt(uint256 difficulty, uint256 offset) public constant returns (uint256, uint256) {
        /* Both the difficulty and offset should be normalized
        * against the difficulty scale.
        * If they are not we might have an integer overflow
@@ -372,12 +385,12 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
        return (offset, offset+difficulty);
    }
 
-   function calculate_mining_reward(uint256 _totalBlocksMined) public constant returns (uint) {
+   function calculate_mining_reward(uint256 _totalBlocksMined) public constant returns (uint256) {
       /* Block rewards starts at 50 Bitcoineum
       *  Every 10 minutes
       *  Block reward decreases by 50% every 210000 blocks
       */
-      uint mined_block_period = 0;
+      uint256 mined_block_period = 0;
       if (_totalBlocksMined < 210000) {
            mined_block_period = 210000;
       } else {
@@ -386,7 +399,7 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
 
       // Again we have to do this iteratively because of floating
       // point limitations in solidity.
-      uint total_reward = 50 * (10 ** 8); // 8 Decimals
+      uint256 total_reward = 50 * (10 ** 8); // 8 Decimals
       uint256 i = 1;
       uint256 rewardperiods = mined_block_period / 210000;
       if (mined_block_period % 210000 > 0) {
@@ -400,18 +413,18 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
 
    // Break out the expected wei calculation
    // for easy external testing
-   function calculate_next_expected_wei(uint _totalWeiCommitted,
-                                        uint _totalWeiExpected,
-                                        uint _minimumDifficultyThresholdWei,
-                                        uint _difficultyScaleMultiplierLimit) public constant
-                                        returns (uint) {
+   function calculate_next_expected_wei(uint256 _totalWeiCommitted,
+                                        uint256 _totalWeiExpected,
+                                        uint256 _minimumDifficultyThresholdWei,
+                                        uint256 _difficultyScaleMultiplierLimit) public constant
+                                        returns (uint256) {
           
           /* The adjustment window has been fulfilled
           *  The new difficulty should be bounded by the total wei actually spent
           * capped at difficultyScaleMultiplierLimit times
           */
-          uint lowerBound = _totalWeiExpected / _difficultyScaleMultiplierLimit;
-          uint upperBound = _totalWeiExpected * _difficultyScaleMultiplierLimit;
+          uint256 lowerBound = _totalWeiExpected / _difficultyScaleMultiplierLimit;
+          uint256 upperBound = _totalWeiExpected * _difficultyScaleMultiplierLimit;
 
           if (_totalWeiCommitted < lowerBound) {
               _totalWeiExpected = lowerBound;
@@ -457,11 +470,11 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    event BlockClaimedEvent(
        address indexed _from,
        address indexed _forCreditTo,
-       uint _reward,
-       uint indexed _blockNumber
+       uint256 _reward,
+       uint256 indexed _blockNumber
    );
 
-   modifier onlyWinner(uint _blockNumber) {
+   modifier onlyWinner(uint256 _blockNumber) {
       require(checkWinning(_blockNumber));
       _;
    }
@@ -472,7 +485,7 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    * @param forCreditTo When the miner account is different from the account
    * where we want to deliver the redeemed Bitcoineum. I.e Hard wallet.
    */
-   function claim(uint _blockNumber, address forCreditTo)
+   function claim(uint256 _blockNumber, address forCreditTo)
                   nonReentrant
                   blockRedeemed(_blockNumber)
                   isBlockMature(_blockNumber)
@@ -491,7 +504,7 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
       totalBlocksMined = totalBlocksMined + 1;
       adjust_difficulty();
 
-      uint reward = calculate_mining_reward(totalBlocksMined);
+      uint256 reward = calculate_mining_reward(totalBlocksMined);
 
       balances[forCreditTo] = balances[forCreditTo].add(reward);
       
@@ -509,7 +522,7 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    * @dev Claim the mining reward for a given block
    * @param _blockNum The internal block that the user is trying to claim
    */
-   function isBlockRedeemed(uint _blockNum) constant public returns (bool) {
+   function isBlockRedeemed(uint256 _blockNum) constant public returns (bool) {
      if (!blockData[_blockNum].isCreated) {
          return false;
      } else {
@@ -521,7 +534,7 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    * @dev Get the target block in the winning equation 
    * @param _blockNum is the internal block number to get the target block for
    */
-   function targetBlockNumber(uint _blockNum) constant public returns (uint) {
+   function targetBlockNumber(uint256 _blockNum) constant public returns (uint256) {
       return ((_blockNum + 1) * blockCreationRate);
    }
 
@@ -529,7 +542,7 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    * @dev Check whether a given block is mature 
    * @param _blockNum is the internal block number to check 
    */
-   function checkBlockMature(uint _blockNum, uint _externalblock) constant public returns (bool) {
+   function checkBlockMature(uint256 _blockNum, uint256 _externalblock) constant public returns (bool) {
      return (_externalblock >= targetBlockNumber(_blockNum));
    }
 
@@ -538,8 +551,8 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    * @param _blockNum is the internal block number to check
    */
 
-   function checkRedemptionWindow(uint _blockNum, uint _externalblock) constant public returns (bool) {
-       uint _targetblock = targetBlockNumber(_blockNum);
+   function checkRedemptionWindow(uint256 _blockNum, uint256 _externalblock) constant public returns (bool) {
+       uint256 _targetblock = targetBlockNumber(_blockNum);
        return _externalblock >= _targetblock && _externalblock < (_targetblock + 256);
    }
 
@@ -547,7 +560,7 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    * @dev Check whether a mining attempt was made by sender for this block
    * @param _blockNum is the internal block number to check
    */
-   function checkMiningAttempt(uint _blockNum, address _sender) constant public returns (bool) {
+   function checkMiningAttempt(uint256 _blockNum, address _sender) constant public returns (bool) {
        return miningAttempts[_blockNum][_sender].isCreated;
    }
 
@@ -555,21 +568,21 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    * @dev Did the user win a specific block and can claim it?
    * @param _blockNum is the internal block number to check
    */
-   function checkWinning(uint _blockNum) constant public returns (bool) {
+   function checkWinning(uint256 _blockNum) constant public returns (bool) {
      if (checkMiningAttempt(_blockNum, msg.sender) && checkBlockMature(_blockNum, current_external_block())) {
 
       InternalBlock memory iBlock = blockData[_blockNum];
-      uint targetBlockNum = targetBlockNumber(iBlock.blockNumber);
+      uint256 targetBlockNum = targetBlockNumber(iBlock.blockNumber);
       MiningAttempt memory attempt = miningAttempts[_blockNum][msg.sender];
 
-      uint difficultyAttempt = calculate_difficulty_attempt(iBlock.targetDifficultyWei, iBlock.totalMiningWei, attempt.value);
-      uint beginRange;
-      uint endRange;
+      uint256 difficultyAttempt = calculate_difficulty_attempt(iBlock.targetDifficultyWei, iBlock.totalMiningWei, attempt.value);
+      uint256 beginRange;
+      uint256 endRange;
       uint256 targetBlockHashInt;
 
       (beginRange, endRange) = calculate_range_attempt(difficultyAttempt,
           calculate_difficulty_attempt(iBlock.targetDifficultyWei, iBlock.totalMiningWei, attempt.projectedOffset)); 
-      targetBlockHashInt = uint256(sha256(block.blockhash(targetBlockNum)));
+      targetBlockHashInt = uint256(sha256(resolve_block_hash(targetBlockNum)));
    
       // This is the winning condition
       if ((beginRange < targetBlockHashInt) && (endRange >= targetBlockHashInt))
