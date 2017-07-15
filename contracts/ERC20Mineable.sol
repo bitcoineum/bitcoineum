@@ -295,9 +295,12 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
       *  nobody has been mining etc.
       *  Will let us recover the network even if the
       * difficulty spikes to some absurd amount
+      * this should only happen on the first attempt on a block
       */
-      adjust_difficulty();
       uint256 internalBlockNum = external_to_internal_block_number(current_external_block());
+      if (blockData[internalBlockNum].totalMiningAttempts == 0) {
+         adjust_difficulty();
+      }
 
       miningAttempts[internalBlockNum][msg.sender] =
                      MiningAttempt({projectedOffset: blockData[internalBlockNum].currentAttemptOffset,
@@ -456,7 +459,7 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
       if ((current_external_block() - lastDifficultyAdjustmentEthereumBlock) > (difficultyAdjustmentPeriod * blockCreationRate)) {
 
           // Get the new total wei expected via static function
-          totalWeiExpected = calculate_next_expected_wei(totalWeiCommitted, totalWeiExpected, minimumDifficultyThresholdWei, difficultyScaleMultiplierLimit);
+          totalWeiExpected = calculate_next_expected_wei(totalWeiCommitted, totalWeiExpected, minimumDifficultyThresholdWei * difficultyAdjustmentPeriod, difficultyScaleMultiplierLimit);
 
           // Regardless of difficulty adjustment, let us zero totalWeiCommited
           totalWeiCommitted = 0;

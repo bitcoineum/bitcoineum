@@ -32,6 +32,18 @@ contract BitcoineumMock is Bitcoineum {
      totalBlocksMined = _blocksMined;
   }
 
+  // We can play with forced difficulty adjustments
+  // by playing with the totalWeiCommitted in a block period
+  // or artificially inflating totalWeiExpected to a specific difficulty
+
+  function set_total_wei_committed(uint256 _wei) {
+     totalWeiCommitted = _wei;
+  }
+
+  function set_total_wei_expected(uint256 _wei) {
+     totalWeiExpected = _wei;
+  }
+
   function resolve_block_hash(uint256 _blockNum) public constant returns (bytes32) {
     return current_block_hash;
   }
