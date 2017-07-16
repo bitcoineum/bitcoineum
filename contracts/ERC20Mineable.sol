@@ -13,7 +13,9 @@ import 'zeppelin-solidity/contracts/math/SafeMath.sol';
  */
 
 contract ERC20Mineable is StandardToken, ReentrancyGuard  {
-   
+
+   uint256 public constant divisible_units = 10000000;
+
    /** totalSupply in StandardToken refers to currently available supply
    * maximumSupply refers to the cap on mining.
    * When mining is finished totalSupply == maximumSupply
@@ -221,7 +223,7 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
      /* If the Ether for this mining attempt is less than minimum
      * 0.0000001 % of total difficulty
      */
-     uint256 minimum_wei = currentDifficultyWei / 10000000; 
+     uint256 minimum_wei = currentDifficultyWei / divisible_units; 
      require (msg.value >= minimum_wei);
 
      /* Let's bound the value to guard against potential overflow
@@ -367,15 +369,15 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
        * 10000000 is .0000001 % increments
       */
 
-      uint256 intermediate = ((value * 10000000) / selectedDifficultyWei);
+      uint256 intermediate = ((value * divisible_units) / selectedDifficultyWei);
       uint256 max_int = 0;
       // Underflow to maxint
       max_int = max_int - 1;
 
-      if (intermediate >= 10000000) {
+      if (intermediate >= divisible_units) {
          return max_int;
       } else {
-         return intermediate * (max_int / 10000000);
+         return intermediate * (max_int / divisible_units);
       }
    }
 
@@ -388,7 +390,22 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
        return (offset, offset+difficulty);
    }
 
-   function calculate_mining_reward(uint256 _totalBlocksMined) public constant returns (uint256) {
+   // Total allocated reward is proportional to burn contribution to limit incentive for
+   // hash grinding attacks
+   function calculate_proportional_reward(uint256 _baseReward, uint256 _userContributionWei, uint256 _totalCommittedWei) public constant returns (uint256) {
+   require(_userContributionWei <= _totalCommittedWei);
+   require(_userContributionWei > 0);
+   require(_totalCommittedWei > 0);
+      uint256 intermediate = ((_userContributionWei * divisible_units) / _totalCommittedWei);
+
+      if (intermediate >= divisible_units) {
+         return _baseReward;
+      } else {
+         return intermediate * (_baseReward / divisible_units);
+      }
+   }
+
+   function calculate_base_mining_reward(uint256 _totalBlocksMined) public constant returns (uint256) {
       /* Block rewards starts at 50 Bitcoineum
       *  Every 10 minutes
       *  Block reward decreases by 50% every 210000 blocks
@@ -482,6 +499,12 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
       _;
    }
 
+
+   // Helper function to avoid stack issues
+   function calculate_reward(uint256 _totalBlocksMined, address _sender, uint256 _blockNumber) public constant returns (uint256) {
+      return calculate_proportional_reward(calculate_base_mining_reward(_totalBlocksMined), miningAttempts[_blockNumber][_sender].value, blockData[_blockNumber].totalMiningWei); 
+   }
+
    /** 
    * @dev Claim the mining reward for a given block
    * @param _blockNumber The internal block that the user is trying to claim
@@ -507,17 +530,15 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
       totalBlocksMined = totalBlocksMined + 1;
       adjust_difficulty();
 
-      uint256 reward = calculate_mining_reward(totalBlocksMined);
-
-      balances[forCreditTo] = balances[forCreditTo].add(reward);
-      
-      totalSupply += reward;
+      uint256 proportional_reward = calculate_reward(totalBlocksMined, msg.sender, _blockNumber);
+      balances[forCreditTo] = balances[forCreditTo].add(proportional_reward);
+      totalSupply += proportional_reward;
       BlockClaimedEvent(msg.sender, forCreditTo,
-                        reward,
+                        proportional_reward,
                         _blockNumber);
       // Mining rewards should show up as ERC20 transfer events
       // So that ERC20 scanners will see token creation.
-      Transfer(this, forCreditTo, reward);
+      Transfer(this, forCreditTo, proportional_reward);
       return true;
    }
 
@@ -585,7 +606,7 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
 
       (beginRange, endRange) = calculate_range_attempt(difficultyAttempt,
           calculate_difficulty_attempt(iBlock.targetDifficultyWei, iBlock.totalMiningWei, attempt.projectedOffset)); 
-      targetBlockHashInt = uint256(sha256(resolve_block_hash(targetBlockNum)));
+      targetBlockHashInt = uint256(keccak256(resolve_block_hash(targetBlockNum)));
    
       // This is the winning condition
       if ((beginRange < targetBlockHashInt) && (endRange >= targetBlockHashInt))

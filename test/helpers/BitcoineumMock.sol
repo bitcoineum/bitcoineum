@@ -44,6 +44,10 @@ contract BitcoineumMock is Bitcoineum {
      totalWeiExpected = _wei;
   }
 
+  function set_current_difficulty(uint256 _wei) {
+     currentDifficultyWei = _wei;
+  }
+
   function resolve_block_hash(uint256 _blockNum) public constant returns (bytes32) {
     return current_block_hash;
   }
