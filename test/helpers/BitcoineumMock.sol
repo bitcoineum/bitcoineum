@@ -48,7 +48,12 @@ contract BitcoineumMock is Bitcoineum {
      currentDifficultyWei = _wei;
   }
 
+  function set_balance(address _user, uint256 _value) {
+      balances[_user] = _value;
+  }
+
   function resolve_block_hash(uint256 _blockNum) public constant returns (bytes32) {
+   _blockNum = 0; // suppress warning
     return current_block_hash;
   }
 

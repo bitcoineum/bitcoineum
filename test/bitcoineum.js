@@ -4,6 +4,11 @@ var Bitcoineum = artifacts.require("./Bitcoineum.sol");
 const assertJump = require('zeppelin-solidity/test/helpers/assertJump');
 var BitcoineumMock = artifacts.require('./helpers/BitcoineumMock.sol');
 
+// Transmutable interface harness
+var GoldMock = artifacts.require('./helpers/GoldMock.sol');
+var FoolsGoldMock = artifacts.require('./helpers/FoolsGoldMock.sol');
+var FakeMock = artifacts.require('./helpers/FakeMock.sol');
+
 var BigNumber = require("bignumber.js");
 
 // Helper functions
@@ -585,6 +590,18 @@ contract('BitcoineumTest', function(accounts) {
 		assert.equal(balance.valueOf(), 50*(10**8));
 	});
 
+	it('should update a beneficiary balance if I mine successfully', async function() {
+		let token = await BitcoineumMock.new();
+		await token.mine({from: accounts[0], value: web3.toWei('1', 'ether')});
+		await token.set_block(11);
+		await token.claim(0, accounts[1]);
+		let balance = await token.balanceOf(accounts[0]);
+		assert.equal(balance.valueOf(), 0);
+		balance = await token.balanceOf(accounts[1]);
+		assert.equal(balance.valueOf(), 50*(10**8));
+	});
+
+
 	it('should update the total supply on claim event', async function() {
 		let token = await BitcoineumMock.new();
 		await token.mine({from: accounts[0], value: web3.toWei('1', 'ether')});
@@ -664,6 +681,39 @@ contract('BitcoineumTest', function(accounts) {
 		assert.equal(balance.valueOf(), 25*(10**8));
 	});
 
+	it('should distribute a proportional reward at minimal difficulty', async function() {
+		let token = await BitcoineumMock.new();
+		await token.set_current_difficulty(web3.toWei('200', 'szabo'));
+		await token.set_total_wei_expected(calcTotalWei(web3.toWei('200', 'szabo')));
+		await token.mine({from: accounts[0], value: minimumWei()});
+		await token.mine({from: accounts[1], value: minimumWei()});
+		await token.set_block(11);
+		await token.claim(0, accounts[0], {from: accounts[0]});
+		let balance = await token.balanceOf(accounts[0]);
+		assert.equal(balance.valueOf(), 25*(10**8));
+	});
+
+	it('should distribute a proportional reward at minimal difficulty', async function() {
+		let token = await BitcoineumMock.new();
+		await token.mine({from: accounts[0], value: minimumWei()});
+		await token.set_block(11);
+		await token.claim(0, accounts[0], {from: accounts[0]});
+		let balance = await token.balanceOf(accounts[0]);
+		assert.equal(balance.valueOf(), 50*(10**8));
+	});
+
+	it('should distribute a proportional reward at high total committment', async function() {
+		let token = await BitcoineumMock.new();
+		await token.mine({from: accounts[0], value: web3.toWei('1000000', 'ether')});
+		await token.mine({from: accounts[1], value: web3.toWei('1000000', 'ether')});
+		await token.mine({from: accounts[2], value: web3.toWei('1000000', 'ether')});
+		await token.mine({from: accounts[3], value: web3.toWei('1000000', 'ether')});
+		await token.set_block(11);
+		await token.claim(0, accounts[1], {from: accounts[1]});
+		let balance = await token.balanceOf(accounts[1]);
+		assert.equal(balance.valueOf(), 12.5*(10**8));
+	});
+
 	});
 
 	describe('During difficulty adjustments', function() {
@@ -719,5 +769,111 @@ contract('BitcoineumTest', function(accounts) {
 
 	describe('Follows the Transmute interface for functional building blocks', function() {
 
+	it('should not let transmute without a balance', async function() {
+		let token = await BitcoineumMock.new();
+		let token2 = await GoldMock.new(); 
+		try {
+			await token.transmute(token2.address, 100);
+		} catch(error) {
+			return assertJump(error)
+		}
 	});
+
+	it('should not let me transmute more than balance', async function() {
+		let token = await BitcoineumMock.new();
+		await token.set_balance(accounts[0], 50*(10**8));
+		let token2 = await GoldMock.new(); 
+
+		try {
+			await token.transmute(token2.address, 50*(10**8)+1);
+		} catch(error) {
+			return assertJump(error)
+		}
+		// Balance should be unaffected
+		let balance = await token.balanceOf(accounts[0]);
+		assert.equal(balance, 50*(10**8));
 	});
+
+	it('should not let me transmute to a contract that does not support TransmutableInterface', async function() {
+		let token = await BitcoineumMock.new();
+		await token.set_balance(accounts[0], 50*(10**8));
+		let token2 = await FakeMock.new(); 
+
+		try {
+			await token.transmute(token2.address, 25*(10**8));
+		} catch(error) {
+			return assertJump(error)
+		}
+
+		// Balance should be unaffected
+		let balance = await token.balanceOf(accounts[0]);
+		assert.equal(balance, 50*(10**8));
+	});
+
+	it('should restore everything on failed transmute', async function() {
+		let token = await BitcoineumMock.new();
+		await token.set_total_supply(50*(10**8));
+		await token.set_balance(accounts[0], 50*(10**8));
+		let token2 = await FoolsGoldMock.new(); 
+
+		try {
+			await token.transmute(token2.address, 25*(10**8));
+		} catch(error) {
+			return assertJump(error)
+		}
+
+		// Balance should be unaffected
+		let balance = await token.balanceOf(accounts[0]);
+		assert.equal(balance, 50*(10**8));
+		let total = await token.totalSupply();
+		assert.equal(total, 50*(10**8));
+	});
+
+	it('should not let me transmute a 0 quantity', async function() {
+		let token = await BitcoineumMock.new();
+		await token.set_total_supply(50*(10**8));
+		await token.set_balance(accounts[0], 50*(10**8));
+		let token2 = await GoldMock.new(); 
+
+		try {
+			await token.transmute(token2.address, 0);
+		} catch(error) {
+			return assertJump(error)
+		}
+	});
+
+	it('should let me transmute my balance', async function() {
+		let token = await BitcoineumMock.new();
+		await token.set_total_supply(50*(10**8));
+		await token.set_balance(accounts[0], 50*(10**8));
+		let token2 = await GoldMock.new(); 
+		let res = await token.transmute(token2.address, 50*(10**8));
+		let balance = await token2.total();
+		assert.equal(balance, 50*(10**8));
+	});
+
+	it('should generate trasmute events', async function() {
+		let token = await BitcoineumMock.new();
+		await token.set_total_supply(50*(10**8));
+		await token.set_balance(accounts[0], 50*(10**8));
+		let token2 = await GoldMock.new()
+		let event = token.Transmuted({});
+
+		let watcher = async function(err, result) {
+			event.stopWatching();
+			if (err) { throw err; }
+			assert.equal(result.args.who, accounts[0]);
+			assert.equal(result.args.baseContract, token.address);
+			assert.equal(result.args.transmutedContract, token2.address);
+			assert.equal(result.args.sourceQuantity, 50*(10**8));
+			assert.equal(result.args.destQuantity, 50*(10**8));
+		};
+		token.transmute(token2.address, 50*(10**8));
+		await awaitEvent(event, watcher);
+	});
+
+
+	});
+
+	});
+
