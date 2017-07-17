@@ -852,6 +852,21 @@ contract('BitcoineumTest', function(accounts) {
 		assert.equal(balance, 100*(10**8));
 	});
 
+	it('should let me transmute a partial balance', async function() {
+		let token = await BitcoineumMock.new();
+		await token.set_total_supply(100*(10**8));
+		await token.set_balance(accounts[0], 100*(10**8));
+		let token2 = await GoldMock.new(); 
+		let balance = await token2.total();
+		assert.equal(balance, 0);
+		let res = await token.transmute(token2.address, 25*(10**8));
+		balance = await token2.total();
+		assert.equal(balance, 25*(10**8));
+		balance = await token.balanceOf(accounts[0]);
+		assert.equal(balance.valueOf(), 75*(10**8));
+	});
+
+
 	it('should generate trasmute events', async function() {
 		let token = await BitcoineumMock.new();
 		await token.set_total_supply(100*(10**8));

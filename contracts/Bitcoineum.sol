@@ -65,21 +65,16 @@ contract Bitcoineum is ERC20Mineable, Transmutable {
   function transmute(address to, uint256 value) nonReentrant returns (bool, uint256) {
     require(value > 0);
     require(balances[msg.sender] >= value);
-    uint256 initial_total_supply = totalSupply;
-    uint256 initial_balance = balances[msg.sender];
-    balances[msg.sender].sub(value);
-    totalSupply.sub(value);
+    require(totalSupply >= value);
+    balances[msg.sender] = balances[msg.sender].sub(value);
+    totalSupply = totalSupply.sub(value);
     TransmutableInterface target = TransmutableInterface(to);
-    bool result = false;
-    uint256 total = 0;
-    (result, total) = target.transmuted(value);
-    if (result) {
-       Transmuted(msg.sender, this, to, value, total);
-    } else {
-      // The transmuted transaction failed, restore balance
-      totalSupply = initial_total_supply;
-      balances[msg.sender] = initial_balance;
-    }
+    bool _result = false;
+    uint256 _total = 0;
+    (_result, _total) = target.transmuted(value);
+    require (_result);
+    Transmuted(msg.sender, this, to, value, _total);
+    return (_result, _total);
   }
 
  }
