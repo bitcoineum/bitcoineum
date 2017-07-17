@@ -69,7 +69,7 @@ contract('BitcoineumTest', function(accounts) {
   it("should have a block creation rate / window of 10 Ethereum blocks", async function() {
   	  let token = await Bitcoineum.new();
   	  let blockCreationRate = await token.blockCreationRate();
-      assert.equal(blockCreationRate.valueOf(), 10, "Block creation rate/window should be 10");
+      assert.equal(blockCreationRate.valueOf(), 50, "Block creation rate/window should be 10");
   });
 
   it("should have a difficulty adjustment period that is 2016 Bitcoinem blocks wide", async function() {
@@ -113,11 +113,11 @@ contract('BitcoineumTest', function(accounts) {
   	  let res = await token.external_to_internal_block_number(0);
   	  assert.equal(res.valueOf(), 0, "External block 0 should be window 0");
   	  res = await token.external_to_internal_block_number(100);
-  	  assert.equal(res.valueOf(), 10, "External block 100 should be window 10");
+  	  assert.equal(res.valueOf(), 2, "External block 100 should be window 2");
   	  res = await token.external_to_internal_block_number(1000);
-  	  assert.equal(res.valueOf(), 100, "External block 100 should be window 10");
+  	  assert.equal(res.valueOf(), 20, "External block 1000 should be window 20");
   	  res = await token.external_to_internal_block_number(maxint);
-  	  assert.equal(res.toString(), maxint.dividedToIntegerBy(10).toString(), "External block 100 should be window 10");
+  	  assert.equal(res.toString(), maxint.dividedToIntegerBy(50).toString(), "External block maxint should be window maxint divided by 50");
   });
 
   it("should correctly scale the attempt to the keyspace", async function() {
@@ -162,15 +162,15 @@ contract('BitcoineumTest', function(accounts) {
   it("should correctly calculate the base mining reward", async function() {
   	  let token = await Bitcoineum.new();
   	  let res = await token.calculate_base_mining_reward(0) 
-  	  assert.equal(res.valueOf(), 50 * (10**8), "At internal block 0, we reward 50 Bitcoineum");
+  	  assert.equal(res.valueOf(), 100 * (10**8), "At internal block 0, we reward 50 Bitcoineum");
       res = await token.calculate_base_mining_reward(1)
-      assert.equal(res.valueOf(), 50 * (10**8), "At internal block 0, we reward 50 Bitcoineum");
+      assert.equal(res.valueOf(), 100 * (10**8), "At internal block 0, we reward 50 Bitcoineum");
       res = await token.calculate_base_mining_reward(210000)
-      assert.equal(res.valueOf(), 50 * (10**8), "50 Bitcoineum up until block 210000");
+      assert.equal(res.valueOf(), 100 * (10**8), "100 Bitcoineum up until block 210000");
       res = await token.calculate_base_mining_reward(210001)
-      assert.equal(res.valueOf(), 25 * (10**8), "25 Bitcoineum immediately after block 210000");
+      assert.equal(res.valueOf(), 50 * (10**8), "25 Bitcoineum immediately after block 210000");
       res = await token.calculate_base_mining_reward(420001);
-      assert.equal(res.valueOf(), 12.5 * (10**8), "12.5 Bitcoineum immediately after block 410000");
+      assert.equal(res.valueOf(), 25 * (10**8), "12.5 Bitcoineum immediately after block 410000");
   });
 
   it("should correctly calculate the proportional mining reward", async function() {
@@ -223,30 +223,30 @@ contract('BitcoineumTest', function(accounts) {
   it("should calculate the target block number for a mining window", async function() {
   	  let token = await Bitcoineum.new();
       let res = await token.targetBlockNumber(1) 
-      assert.equal(res.valueOf(), 20, "The block matures at the beginning of the next window");
+      assert.equal(res.valueOf(), 100, "The block matures at the beginning of the next window");
       res = await token.targetBlockNumber(3969300);
-      assert.equal(res.valueOf(), 3969301*10, "Block matures in the next window");
+      assert.equal(res.valueOf(), 3969301*50, "Block matures in the next window");
   });
 
   it("should check block maturity", async function() {
   	  let token = await Bitcoineum.new();
-      let res = await token.checkBlockMature(1, 20) 
+      let res = await token.checkBlockMature(1, 100) 
       assert.isTrue(res)
-	  res = await token.checkBlockMature(1, 11)
+	  res = await token.checkBlockMature(1, 99)
 	  assert.isFalse(res);
-	  res = await token.checkBlockMature(1000, 11000)
+	  res = await token.checkBlockMature(1000, 50050)
 	  assert.isTrue(res);
   });
 
   it("should validate the redemption window", async function() {
   	  let token = await Bitcoineum.new();
-  	  let res = await token.checkRedemptionWindow(1, 10); 
+  	  let res = await token.checkRedemptionWindow(1, 50); 
   	  assert.isFalse(res);
-  	  res = await token.checkRedemptionWindow(100, 1010); 
+  	  res = await token.checkRedemptionWindow(100, 5050); 
   	  assert.isTrue(res);
-  	  res = await token.checkRedemptionWindow(100, 1265, "At threshold"); 
+  	  res = await token.checkRedemptionWindow(100, 5305, "At threshold"); 
   	  assert.isTrue(res);
-  	  res = await token.checkRedemptionWindow(100, 1266, "Pass threshold"); 
+  	  res = await token.checkRedemptionWindow(100, 5306, "Pass threshold"); 
   	  assert.isFalse(res);
 	});
 
@@ -280,7 +280,7 @@ contract('BitcoineumTest', function(accounts) {
       let blockCurrentAttemptOffset = res[12];
       assert.equal(currentDifficultyWei, minimumWei());
       assert.equal(minimumDifficultyThresholdWei, minimumWei());
-      assert.equal(blockCreationRate.valueOf(), 10);
+      assert.equal(blockCreationRate.valueOf(), 50);
       assert.equal(difficultyAdjustmentPeriod.valueOf(), 2016);
       assert.equal(rewardAdjustmentPeriod.valueOf(), 210000);
       assert.notEqual(lastDifficultyAdjustmentEthereumBlock.valueOf(), 1);
@@ -309,7 +309,7 @@ contract('BitcoineumTest', function(accounts) {
 		assert.equal(blockNumber, 10000);
 		// For test harness verification
 		let internalBlockNumber = await token.get_internal_block_number();
-		assert.equal(internalBlockNumber, 1000);  // 1000th window
+		assert.equal(internalBlockNumber.valueOf(), 200);  // 200th window
 	});
 
 	describe('During mining operations', function() {
@@ -336,7 +336,7 @@ contract('BitcoineumTest', function(accounts) {
   	  await token.set_current_difficulty(web3.toWei('1', 'ether'));
   	  await token.set_total_wei_expected(calcTotalWei(web3.toWei('1', 'ether')));
   	  await token.mine({from: accounts[0], value: web3.toWei('1', 'ether')});
-  	  await token.set_block(11);
+  	  await token.set_block(51);
   	  await token.claim(0, accounts[0], {from: accounts[0]});
   	  res = await token.isBlockRedeemed(0);
   	  assert.equal(res, true);
@@ -459,14 +459,14 @@ contract('BitcoineumTest', function(accounts) {
 		it('should allow me to redeem a block that has matured', async function() {
 			let token = await BitcoineumMock.new();
 			await token.mine({from: accounts[0], value: web3.toWei('1', 'ether')});
-			await token.set_block(11);
+			await token.set_block(51);
 			let ret = await token.claim(0, accounts[0]);
 		});
 
 		it('should not allow me to redeem a block twice', async function() {
 			let token = await BitcoineumMock.new();
 			await token.mine({from: accounts[0], value: web3.toWei('1', 'ether')});
-			await token.set_block(11);
+			await token.set_block(51);
 			await token.claim(0, accounts[0]);
 			try {
 				await token.claim(0, accounts[0]);
@@ -479,7 +479,7 @@ contract('BitcoineumTest', function(accounts) {
 			let token = await BitcoineumMock.new();
 			await token.mine({from: accounts[0], value: web3.toWei('1', 'ether')});
 			await token.mine({from: accounts[1], value: web3.toWei('10', 'szabo')});
-			await token.set_block(11);
+			await token.set_block(51);
 			await token.claim(0, accounts[0]);
 			try {
 				await token.claim(0, accounts[0], {from: accounts[1]});
@@ -492,7 +492,7 @@ contract('BitcoineumTest', function(accounts) {
 		it('show not allow me to redeem a block that I have not attempted to mine', async function() {
 			let token = await BitcoineumMock.new();
 			await token.mine({from: accounts[1], value: web3.toWei('1', 'ether')});
-			await token.set_block(11);
+			await token.set_block(51);
 			try {
 				await token.claim(0, accounts[0]);
 			} catch(error) {
@@ -505,7 +505,7 @@ contract('BitcoineumTest', function(accounts) {
 			let token = await BitcoineumMock.new();
 			await token.mine({from: accounts[1], value: web3.toWei('1', 'ether')});
 			await token.mine({from: accounts[0], value: web3.toWei('10', 'szabo')});
-			await token.set_block(11);
+			await token.set_block(51);
 			try {
 				await token.claim(0, accounts[0]);
 			} catch(error) {
@@ -525,14 +525,14 @@ contract('BitcoineumTest', function(accounts) {
 			await token.mine({from: accounts[8], value: web3.toWei('10', 'szabo')});
 			await token.mine({from: accounts[9], value: web3.toWei('10', 'szabo')});
 			await token.mine({from: accounts[0], value: web3.toWei('1', 'ether')});
-			await token.set_block(11);
+			await token.set_block(51);
 			let ret = await token.claim(0, accounts[0]);
 		});
 
 		it('should not let me redeem a block outside of the redemption window', async function() { 
 			let token = await BitcoineumMock.new();
 			await token.mine({from: accounts[0], value: minimumWei()});
-			await token.set_block(100);
+			await token.set_block(150);
 			try {
 				await token.claim(0, accounts[0]);
 			} catch(error) {
@@ -550,7 +550,7 @@ contract('BitcoineumTest', function(accounts) {
 			if (err) { throw err; }
 			assert.equal(result.args._from, accounts[0]);
 			assert.equal(result.args._forCreditTo, accounts[0]);
-			assert.equal(result.args._reward.valueOf(), 50 * (10**8)); 
+			assert.equal(result.args._reward.valueOf(), 100 * (10**8)); 
 			assert.equal(result.args._blockNumber, 0);
 		};
 
@@ -559,7 +559,7 @@ contract('BitcoineumTest', function(accounts) {
 			if (err) { throw err; }
 			assert.equal(result.args.from, token.address);
 			assert.equal(result.args.to, accounts[0]);
-			assert.equal(result.args.value, 50 * (10**8));
+			assert.equal(result.args.value, 100 * (10**8));
 		};
 
 
@@ -573,7 +573,7 @@ contract('BitcoineumTest', function(accounts) {
 	it('should let me verify winning status asynchronously', async function() {
 		let token = await BitcoineumMock.new();
 		await token.mine({from: accounts[0], value: web3.toWei('1', 'ether')});
-		await token.set_block(11);
+		await token.set_block(51);
 		let status = await token.checkWinning(0);
 		assert.equal(status, true);
 		status = await token.checkWinning(0, {from: accounts[1]});
@@ -584,38 +584,38 @@ contract('BitcoineumTest', function(accounts) {
 	it('should update my balance if I mine successfully', async function() {
 		let token = await BitcoineumMock.new();
 		await token.mine({from: accounts[0], value: web3.toWei('1', 'ether')});
-		await token.set_block(11);
+		await token.set_block(51);
 		await token.claim(0, accounts[0]);
 		let balance = await token.balanceOf(accounts[0]);
-		assert.equal(balance.valueOf(), 50*(10**8));
+		assert.equal(balance.valueOf(), 100*(10**8));
 	});
 
 	it('should update a beneficiary balance if I mine successfully', async function() {
 		let token = await BitcoineumMock.new();
 		await token.mine({from: accounts[0], value: web3.toWei('1', 'ether')});
-		await token.set_block(11);
+		await token.set_block(51);
 		await token.claim(0, accounts[1]);
 		let balance = await token.balanceOf(accounts[0]);
 		assert.equal(balance.valueOf(), 0);
 		balance = await token.balanceOf(accounts[1]);
-		assert.equal(balance.valueOf(), 50*(10**8));
+		assert.equal(balance.valueOf(), 100*(10**8));
 	});
 
 
 	it('should update the total supply on claim event', async function() {
 		let token = await BitcoineumMock.new();
 		await token.mine({from: accounts[0], value: web3.toWei('1', 'ether')});
-		await token.set_block(11);
+		await token.set_block(51);
 		await token.claim(0, accounts[0]);
 		let totalSupply = await token.totalSupply();
-		assert.equal(totalSupply.valueOf(), 50*(10**8));
+		assert.equal(totalSupply.valueOf(), 100*(10**8));
 		await token.set_blocks_mined(211000);
 		await token.set_block(1000);
 		await token.mine({from: accounts[0], value: web3.toWei('1', 'ether')});
-		await token.set_block(1011);
-		await token.claim(100, accounts[0]);
+		await token.set_block(1051);
+		await token.claim(20, accounts[0]);
 		totalSupply = await token.totalSupply();
-		assert.equal(totalSupply.valueOf(), 50*(10**8) + 25*(10**8));
+		assert.equal(totalSupply.valueOf(), 100*(10**8) + 50*(10**8));
 	});
 
 
@@ -623,24 +623,24 @@ contract('BitcoineumTest', function(accounts) {
 		let token = await BitcoineumMock.new();
 		await token.set_blocks_mined(211000);
 		await token.mine({from: accounts[0], value: web3.toWei('1', 'ether')});
-		await token.set_block(11);
+		await token.set_block(51);
 		await token.claim(0, accounts[0]);
 		let balance = await token.balanceOf(accounts[0]);
-		assert.equal(balance.valueOf(), 25*(10**8));
+		assert.equal(balance.valueOf(), 50*(10**8));
 		await token.set_blocks_mined(422000);
 		await token.set_block(1000);
 		await token.mine({from: accounts[0], value: web3.toWei('1', 'ether')});
-		await token.set_block(1011);
-		await token.claim(100, accounts[0]);
+		await token.set_block(1051);
+		await token.claim(20, accounts[0]);
 		balance = await token.balanceOf(accounts[0]);
-		assert.equal(balance.valueOf(), 25*(10**8) + 12.5*(10**8));
+		assert.equal(balance.valueOf(), 50*(10**8) + 25*(10**8));
 		await token.set_blocks_mined(633000);
 		await token.set_block(2000);
 		await token.mine({from: accounts[0], value: web3.toWei('1', 'ether')});
-		await token.set_block(2011);
-		await token.claim(200, accounts[0]);
+		await token.set_block(2051);
+		await token.claim(40, accounts[0]);
 		balance = await token.balanceOf(accounts[0]);
-		assert.equal(balance.valueOf(), 25*(10**8) + 12.5*(10**8) + 6.25*(10**8));
+		assert.equal(balance.valueOf(), 50*(10**8) + 25*(10**8) + 12.5*(10**8));
 	});
 
 
@@ -651,10 +651,10 @@ contract('BitcoineumTest', function(accounts) {
 
 		await token.mine({from: accounts[0], value: web3.toWei('1', 'ether')});
 		await token.mine({from: accounts[1], value: web3.toWei('1', 'ether')});
-		await token.set_block(11);
+		await token.set_block(51);
 		await token.claim(0, accounts[0]);
 		let balance = await token.balanceOf(accounts[0]);
-		assert.equal(balance.valueOf(), 25*(10**8));
+		assert.equal(balance.valueOf(), 50*(10**8));
 	});
 
 	it('should distribute a proportional reward when mining is under total difficulty', async function() {
@@ -663,10 +663,10 @@ contract('BitcoineumTest', function(accounts) {
 		await token.set_total_wei_expected(calcTotalWei(web3.toWei('1', 'ether')));
 		await token.mine({from: accounts[0], value: web3.toWei('0.25', 'ether')});
 		await token.mine({from: accounts[1], value: web3.toWei('0.25', 'ether')});
-		await token.set_block(11);
+		await token.set_block(51);
 		await token.claim(0, accounts[0], {from: accounts[1]});
 		let balance = await token.balanceOf(accounts[0]);
-		assert.equal(balance.valueOf(), 25*(10**8));
+		assert.equal(balance.valueOf(), 50*(10**8));
 	});
 
 	it('should distribute a proportional reward when mining is equal to difficulty', async function() {
@@ -675,10 +675,10 @@ contract('BitcoineumTest', function(accounts) {
 		await token.set_total_wei_expected(calcTotalWei(web3.toWei('1', 'ether')));
 		await token.mine({from: accounts[0], value: web3.toWei('0.5', 'ether')});
 		await token.mine({from: accounts[1], value: web3.toWei('0.5', 'ether')});
-		await token.set_block(11);
+		await token.set_block(51);
 		await token.claim(0, accounts[0], {from: accounts[0]});
 		let balance = await token.balanceOf(accounts[0]);
-		assert.equal(balance.valueOf(), 25*(10**8));
+		assert.equal(balance.valueOf(), 50*(10**8));
 	});
 
 	it('should distribute a proportional reward at minimal difficulty', async function() {
@@ -687,19 +687,19 @@ contract('BitcoineumTest', function(accounts) {
 		await token.set_total_wei_expected(calcTotalWei(web3.toWei('200', 'szabo')));
 		await token.mine({from: accounts[0], value: minimumWei()});
 		await token.mine({from: accounts[1], value: minimumWei()});
-		await token.set_block(11);
+		await token.set_block(51);
 		await token.claim(0, accounts[0], {from: accounts[0]});
 		let balance = await token.balanceOf(accounts[0]);
-		assert.equal(balance.valueOf(), 25*(10**8));
+		assert.equal(balance.valueOf(), 50*(10**8));
 	});
 
 	it('should distribute a proportional reward at minimal difficulty', async function() {
 		let token = await BitcoineumMock.new();
 		await token.mine({from: accounts[0], value: minimumWei()});
-		await token.set_block(11);
+		await token.set_block(51);
 		await token.claim(0, accounts[0], {from: accounts[0]});
 		let balance = await token.balanceOf(accounts[0]);
-		assert.equal(balance.valueOf(), 50*(10**8));
+		assert.equal(balance.valueOf(), 100*(10**8));
 	});
 
 	it('should distribute a proportional reward at high total committment', async function() {
@@ -708,10 +708,10 @@ contract('BitcoineumTest', function(accounts) {
 		await token.mine({from: accounts[1], value: web3.toWei('1000000', 'ether')});
 		await token.mine({from: accounts[2], value: web3.toWei('1000000', 'ether')});
 		await token.mine({from: accounts[3], value: web3.toWei('1000000', 'ether')});
-		await token.set_block(11);
+		await token.set_block(51);
 		await token.claim(0, accounts[1], {from: accounts[1]});
 		let balance = await token.balanceOf(accounts[1]);
-		assert.equal(balance.valueOf(), 12.5*(10**8));
+		assert.equal(balance.valueOf(), 25*(10**8));
 	});
 
 	});
@@ -724,7 +724,7 @@ contract('BitcoineumTest', function(accounts) {
 		let lastAdjustment = await token.lastDifficultyAdjustmentEthereumBlock();
 
 		// Jump into the future 
-		await token.set_block(lastAdjustment.plus(2016*10).plus(1));
+		await token.set_block(lastAdjustment.plus(2016*50).plus(1));
 		// 5 time the difficulty expected in a default period
 		await token.set_total_wei_committed(calcTotalWei(web3.toWei('500', 'szabo')))
 		await token.mine({from: accounts[0], value: minimumWei()});
@@ -739,7 +739,7 @@ contract('BitcoineumTest', function(accounts) {
 		let lastAdjustment = await token.lastDifficultyAdjustmentEthereumBlock();
 		await token.set_total_wei_expected(calcTotalWei(web3.toWei('1', 'ether')));
 		// Jump into the future 
-		await token.set_block(lastAdjustment.plus(2016*10).plus(1));
+		await token.set_block(lastAdjustment.plus(2016*50).plus(1));
 		await token.set_total_wei_committed(calcTotalWei(web3.toWei('0.1', 'ether')))
 		await token.mine({from: accounts[0], value: web3.toWei('1', 'ether')});
 		let totalWeiExpected = await token.totalWeiExpected();
@@ -754,7 +754,7 @@ contract('BitcoineumTest', function(accounts) {
 		let lastAdjustment = await token.lastDifficultyAdjustmentEthereumBlock();
 		await token.set_total_wei_expected(calcTotalWei(web3.toWei('200', 'szabo')));
 		// Jump into the future 
-		await token.set_block(lastAdjustment.plus(2016*10).plus(1));
+		await token.set_block(lastAdjustment.plus(2016*50).plus(1));
 		await token.set_total_wei_committed(calcTotalWei(web3.toWei('50', 'szabo')))
 		await token.mine({from: accounts[0], value: web3.toWei('50', 'szabo')});
 		let totalWeiExpected = await token.totalWeiExpected();
@@ -781,22 +781,22 @@ contract('BitcoineumTest', function(accounts) {
 
 	it('should not let me transmute more than balance', async function() {
 		let token = await BitcoineumMock.new();
-		await token.set_balance(accounts[0], 50*(10**8));
+		await token.set_balance(accounts[0], 100*(10**8));
 		let token2 = await GoldMock.new(); 
 
 		try {
-			await token.transmute(token2.address, 50*(10**8)+1);
+			await token.transmute(token2.address, 100*(10**8)+1);
 		} catch(error) {
 			return assertJump(error)
 		}
 		// Balance should be unaffected
 		let balance = await token.balanceOf(accounts[0]);
-		assert.equal(balance, 50*(10**8));
+		assert.equal(balance, 100*(10**8));
 	});
 
 	it('should not let me transmute to a contract that does not support TransmutableInterface', async function() {
 		let token = await BitcoineumMock.new();
-		await token.set_balance(accounts[0], 50*(10**8));
+		await token.set_balance(accounts[0], 100*(10**8));
 		let token2 = await FakeMock.new(); 
 
 		try {
@@ -807,13 +807,13 @@ contract('BitcoineumTest', function(accounts) {
 
 		// Balance should be unaffected
 		let balance = await token.balanceOf(accounts[0]);
-		assert.equal(balance, 50*(10**8));
+		assert.equal(balance, 100*(10**8));
 	});
 
 	it('should restore everything on failed transmute', async function() {
 		let token = await BitcoineumMock.new();
-		await token.set_total_supply(50*(10**8));
-		await token.set_balance(accounts[0], 50*(10**8));
+		await token.set_total_supply(100*(10**8));
+		await token.set_balance(accounts[0], 100*(10**8));
 		let token2 = await FoolsGoldMock.new(); 
 
 		try {
@@ -824,15 +824,15 @@ contract('BitcoineumTest', function(accounts) {
 
 		// Balance should be unaffected
 		let balance = await token.balanceOf(accounts[0]);
-		assert.equal(balance, 50*(10**8));
+		assert.equal(balance, 100*(10**8));
 		let total = await token.totalSupply();
-		assert.equal(total, 50*(10**8));
+		assert.equal(total, 100*(10**8));
 	});
 
 	it('should not let me transmute a 0 quantity', async function() {
 		let token = await BitcoineumMock.new();
-		await token.set_total_supply(50*(10**8));
-		await token.set_balance(accounts[0], 50*(10**8));
+		await token.set_total_supply(100*(10**8));
+		await token.set_balance(accounts[0], 100*(10**8));
 		let token2 = await GoldMock.new(); 
 
 		try {
@@ -844,18 +844,18 @@ contract('BitcoineumTest', function(accounts) {
 
 	it('should let me transmute my balance', async function() {
 		let token = await BitcoineumMock.new();
-		await token.set_total_supply(50*(10**8));
-		await token.set_balance(accounts[0], 50*(10**8));
+		await token.set_total_supply(100*(10**8));
+		await token.set_balance(accounts[0], 100*(10**8));
 		let token2 = await GoldMock.new(); 
-		let res = await token.transmute(token2.address, 50*(10**8));
+		let res = await token.transmute(token2.address, 100*(10**8));
 		let balance = await token2.total();
-		assert.equal(balance, 50*(10**8));
+		assert.equal(balance, 100*(10**8));
 	});
 
 	it('should generate trasmute events', async function() {
 		let token = await BitcoineumMock.new();
-		await token.set_total_supply(50*(10**8));
-		await token.set_balance(accounts[0], 50*(10**8));
+		await token.set_total_supply(100*(10**8));
+		await token.set_balance(accounts[0], 100*(10**8));
 		let token2 = await GoldMock.new()
 		let event = token.Transmuted({});
 
@@ -865,10 +865,10 @@ contract('BitcoineumTest', function(accounts) {
 			assert.equal(result.args.who, accounts[0]);
 			assert.equal(result.args.baseContract, token.address);
 			assert.equal(result.args.transmutedContract, token2.address);
-			assert.equal(result.args.sourceQuantity, 50*(10**8));
-			assert.equal(result.args.destQuantity, 50*(10**8));
+			assert.equal(result.args.sourceQuantity, 100*(10**8));
+			assert.equal(result.args.destQuantity, 100*(10**8));
 		};
-		token.transmute(token2.address, 50*(10**8));
+		token.transmute(token2.address, 100*(10**8));
 		await awaitEvent(event, watcher);
 	});
 

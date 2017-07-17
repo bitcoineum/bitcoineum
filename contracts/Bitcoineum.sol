@@ -5,7 +5,8 @@ import './Transmutable.sol';
 
 /**
  * @title Bitcoineum: A store of value on the Ethereum network
- * @dev A coin designed to create store-of-value semantics
+ * @dev User-centric mining component
+ * @dev Transmutable interface for converting into different tokens
  */
 
 
@@ -31,7 +32,8 @@ contract Bitcoineum is ERC20Mineable, Transmutable {
     minimumDifficultyThresholdWei = 100 szabo;
     
     // Ethereum blocks to internal blocks
-    blockCreationRate = 10;
+    // Roughly 10 minute windows
+    blockCreationRate = 50;
 
     // Adjust difficulty x claimed internal blocks
     difficultyAdjustmentPeriod = 2016;

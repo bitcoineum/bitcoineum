@@ -16,6 +16,8 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
 
    uint256 public constant divisible_units = 10000000;
 
+   uint256 public constant initial_reward = 100;
+
    /** totalSupply in StandardToken refers to currently available supply
    * maximumSupply refers to the cap on mining.
    * When mining is finished totalSupply == maximumSupply
@@ -406,7 +408,7 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    }
 
    function calculate_base_mining_reward(uint256 _totalBlocksMined) public constant returns (uint256) {
-      /* Block rewards starts at 50 Bitcoineum
+      /* Block rewards starts at initial_reward
       *  Every 10 minutes
       *  Block reward decreases by 50% every 210000 blocks
       */
@@ -419,7 +421,7 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
 
       // Again we have to do this iteratively because of floating
       // point limitations in solidity.
-      uint256 total_reward = 50 * (10 ** 8); // 8 Decimals
+      uint256 total_reward = initial_reward * (10 ** 8); // 8 Decimals
       uint256 i = 1;
       uint256 rewardperiods = mined_block_period / 210000;
       if (mined_block_period % 210000 > 0) {
