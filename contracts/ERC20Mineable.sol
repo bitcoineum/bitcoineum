@@ -15,6 +15,7 @@ import 'zeppelin-solidity/contracts/math/SafeMath.sol';
 contract ERC20Mineable is StandardToken, ReentrancyGuard  {
 
    uint256 public constant divisible_units = 10000000;
+   uint256 public constant decimals = 8;
 
    uint256 public constant initial_reward = 100;
 
@@ -31,8 +32,8 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
    uint256 public minimumDifficultyThresholdWei;
 
    /** Block creation rate as number of Ethereum blocks per mining cycle
-   * 10 minutes at 17 seconds a block would be an internal block
-   * generated every 35 Ethereum blocks
+   * 10 minutes at 12 seconds a block would be an internal block
+   * generated every 50 Ethereum blocks
    */
    uint256 public blockCreationRate;
 
@@ -185,6 +186,16 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
     iBlock.isCreated);
    }
 
+   function getMiningAttempt(uint256 _blockNum, address _who) public constant returns (uint256, uint256, bool) {
+     if (miningAttempts[_blockNum][_who].isCreated) {
+        return (miningAttempts[_blockNum][_who].projectedOffset,
+        miningAttempts[_blockNum][_who].value,
+        miningAttempts[_blockNum][_who].isCreated);
+     } else {
+        return (0, 0, false);
+     }
+   }
+
    // Mining Related
 
    modifier blockCreated(uint256 _blockNum) {
@@ -206,6 +217,9 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
      require(_blockNum != current_external_block());
 
      if (!blockData[_blockNum].isCreated) {
+       // This is a new block, adjust difficulty
+       adjust_difficulty();
+
        // Create new block for tracking
        blockData[_blockNum] = InternalBlock(
                                      {targetDifficultyWei: currentDifficultyWei,
@@ -302,10 +316,6 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
       * this should only happen on the first attempt on a block
       */
       uint256 internalBlockNum = external_to_internal_block_number(current_external_block());
-      if (blockData[internalBlockNum].totalMiningAttempts == 0) {
-         adjust_difficulty();
-      }
-
       miningAttempts[internalBlockNum][msg.sender] =
                      MiningAttempt({projectedOffset: blockData[internalBlockNum].currentAttemptOffset,
                                     value: msg.value,
@@ -421,7 +431,7 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
 
       // Again we have to do this iteratively because of floating
       // point limitations in solidity.
-      uint256 total_reward = initial_reward * (10 ** 8); // 8 Decimals
+      uint256 total_reward = initial_reward * (10 ** decimals); 
       uint256 i = 1;
       uint256 rewardperiods = mined_block_period / 210000;
       if (mined_block_period % 210000 > 0) {
@@ -480,6 +490,8 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
           // Get the new total wei expected via static function
           totalWeiExpected = calculate_next_expected_wei(totalWeiCommitted, totalWeiExpected, minimumDifficultyThresholdWei * difficultyAdjustmentPeriod, difficultyScaleMultiplierLimit);
 
+          currentDifficultyWei = totalWeiExpected / difficultyAdjustmentPeriod;
+
           // Regardless of difficulty adjustment, let us zero totalWeiCommited
           totalWeiCommitted = 0;
 
@@ -530,7 +542,6 @@ contract ERC20Mineable is StandardToken, ReentrancyGuard  {
       blockData[_blockNumber].payed = true;
       blockData[_blockNumber].payee = msg.sender;
       totalBlocksMined = totalBlocksMined + 1;
-      adjust_difficulty();
 
       uint256 proportional_reward = calculate_reward(totalBlocksMined, msg.sender, _blockNumber);
       balances[forCreditTo] = balances[forCreditTo].add(proportional_reward);

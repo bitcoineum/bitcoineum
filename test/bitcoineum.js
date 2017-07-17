@@ -41,11 +41,31 @@ contract('BitcoineumTest', function(accounts) {
   var maxint = new BigNumber(2).toPower(256).minus(1);
 
   // Starts with static element testing for constants and setup
+
+  it("should have 10000000 divisible units", async function() {
+  	  let token = await Bitcoineum.new();
+  	  let divisible = await token.divisible_units();
+  	  assert.equal(divisible, 10000000, "Divisible units should be 10000000");
+  });
+
   it("should have 8 decimals", async function() {
   	  let token = await Bitcoineum.new();
   	  let decimals = await token.decimals();
   	  assert.equal(decimals, 8, "Decimal length should be 8");
   });
+
+  it("should have an initial base reward", async function() {
+  	  let token = await Bitcoineum.new();
+  	  let reward = await token.initial_reward();
+  	  assert.equal(reward, 100, "Initial reward should be 100");
+  });
+
+  it("should have a difficulty scale multiplier", async function() {
+  	  let token = await Bitcoineum.new();
+  	  let scale = await token.difficultyScaleMultiplierLimit();
+  	  assert.equal(scale, 4);
+  });
+
 
   it("should have a maximum supply of 21000000 Bitcoineum", async function() {
   	  let token = await Bitcoineum.new();
@@ -66,10 +86,10 @@ contract('BitcoineumTest', function(accounts) {
   });
 
 	// Should be 60 in production?
-  it("should have a block creation rate / window of 10 Ethereum blocks", async function() {
+  it("should have a block creation rate / window of 50 Ethereum blocks", async function() {
   	  let token = await Bitcoineum.new();
   	  let blockCreationRate = await token.blockCreationRate();
-      assert.equal(blockCreationRate.valueOf(), 50, "Block creation rate/window should be 10");
+      assert.equal(blockCreationRate.valueOf(), 50, "Block creation rate/window should be 50");
   });
 
   it("should have a difficulty adjustment period that is 2016 Bitcoinem blocks wide", async function() {
@@ -391,6 +411,26 @@ contract('BitcoineumTest', function(accounts) {
 		assert.equal(isCreated, true);
 	});
 
+	it('should set block difficulty correctly', async function() {
+		let token = await BitcoineumMock.new();
+		let lastAdjustment = await token.lastDifficultyAdjustmentEthereumBlock();
+		await token.set_total_wei_committed(calcTotalWei(web3.toWei('100', 'ether')))
+		await token.set_total_wei_expected(calcTotalWei(web3.toWei('1', 'ether')));
+		// Jump into the future 
+		await token.set_block(lastAdjustment.plus(2016*50).plus(1));
+		let currentBlockWindow = lastAdjustment.plus(2016*50).plus(1).dividedToIntegerBy(50);
+		await token.mine({from: accounts[0], value: minimumWei()});
+		let [targetDifficultyWei, blockNumber, totalMiningWei, totalMiningAttempts, currentAttemptOffset, payed, payee, isCreated] = await token.getBlockData(currentBlockWindow);
+		// Let's verify defaults
+		assert.equal(targetDifficultyWei.toString(), web3.toWei('4', 'ether'));
+		assert.equal(totalMiningWei, minimumWei());
+		assert.equal(totalMiningAttempts, 1);
+		assert.equal(currentAttemptOffset, minimumWei());
+		assert.equal(payed, false);
+		assert.equal(isCreated, true);
+	});
+
+
 	it('should not allow me to attempt to mine twice from the same address', async function() {
 		let token = await BitcoineumMock.new();
 		await token.mine({from: accounts[0], value: minimumWei()});
@@ -411,6 +451,26 @@ contract('BitcoineumTest', function(accounts) {
 		assert.equal(currentAttemptOffset, web3.toWei('300', 'szabo'));
 		assert.equal(totalMiningWei, web3.toWei('300', 'szabo'));
 	});
+
+	it('should correctly populate the mining attempt structure', async function() {
+		let token = await BitcoineumMock.new();
+		await token.mine({from: accounts[0], value: minimumWei()});
+		await token.mine({from: accounts[1], value: minimumWei()});
+		await token.mine({from: accounts[2], value: minimumWei()});
+		let [offset, value, created] = await token.getMiningAttempt(0, accounts[0]);
+		assert.equal(offset, 0);
+		assert.equal(value, minimumWei());
+		assert.equal(created, true);
+		[offset, value, created] = await token.getMiningAttempt(0, accounts[1]);
+		assert.equal(offset, minimumWei());
+		assert.equal(value, minimumWei());
+		assert.equal(created, true);
+		[offset, value, created] = await token.getMiningAttempt(0, accounts[2]);
+		assert.equal(offset.toString(), web3.toWei('200', 'szabo'));
+		assert.equal(value, minimumWei());
+		assert.equal(created, true);
+	});
+
 
 
 	// Let's watch for the mining attempt event
@@ -664,7 +724,7 @@ contract('BitcoineumTest', function(accounts) {
 		await token.mine({from: accounts[0], value: web3.toWei('0.25', 'ether')});
 		await token.mine({from: accounts[1], value: web3.toWei('0.25', 'ether')});
 		await token.set_block(51);
-		await token.claim(0, accounts[0], {from: accounts[1]});
+		await token.claim(0, accounts[0], {from: accounts[0]});
 		let balance = await token.balanceOf(accounts[0]);
 		assert.equal(balance.valueOf(), 50*(10**8));
 	});
@@ -730,8 +790,10 @@ contract('BitcoineumTest', function(accounts) {
 		await token.mine({from: accounts[0], value: minimumWei()});
 		let totalWeiExpected = await token.totalWeiExpected();
 		let totalWeiCommitted = await token.totalWeiCommitted();
+		let currentDifficulty = await token.currentDifficultyWei();
 		assert.equal(totalWeiCommitted.valueOf(), minimumWei());
 		assert.equal(totalWeiExpected.toString(), calcTotalWei(web3.toWei('400', 'szabo')));
+		assert.equal(currentDifficulty.toString(), web3.toWei('400', 'szabo'));
 	});
 
 	it('should adjust Difficulty down by capped percentage', async function() {
@@ -744,9 +806,11 @@ contract('BitcoineumTest', function(accounts) {
 		await token.mine({from: accounts[0], value: web3.toWei('1', 'ether')});
 		let totalWeiExpected = await token.totalWeiExpected();
 		let totalWeiCommitted = await token.totalWeiCommitted();
+		let currentDifficulty = await token.currentDifficultyWei();
 		assert.equal(totalWeiCommitted.valueOf(), web3.toWei('1', 'ether'));
 		// Should be 1/4 of expected wei rather than 1/10 that was committed
 		assert.equal(totalWeiExpected.toString(), calcTotalWei(web3.toWei('0.25', 'ether')));
+		assert.equal(currentDifficulty.toString(), web3.toWei('0.25', 'ether'));
 	});
 
 	it('should not adjust below minimum difficulty', async function() {
@@ -759,9 +823,11 @@ contract('BitcoineumTest', function(accounts) {
 		await token.mine({from: accounts[0], value: web3.toWei('50', 'szabo')});
 		let totalWeiExpected = await token.totalWeiExpected();
 		let totalWeiCommitted = await token.totalWeiCommitted();
+		let currentDifficulty = await token.currentDifficultyWei();
 		assert.equal(totalWeiCommitted.valueOf(), web3.toWei('50', 'szabo'));
 		// Difficulty should now go below 100 szabo per block
 		assert.equal(totalWeiExpected.toString(), calcTotalWei(minimumWei()));
+		assert.equal(currentDifficulty.toString(), minimumWei());
 	});
 
 	});
