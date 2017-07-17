@@ -678,6 +678,22 @@ contract('BitcoineumTest', function(accounts) {
 		assert.equal(totalSupply.valueOf(), 100*(10**8) + 50*(10**8));
 	});
 
+	it('should update block entry on claim event', async function() {
+		let token = await BitcoineumMock.new();
+		await token.mine({from: accounts[0], value: minimumWei()});
+		await token.set_block(51);
+		await token.claim(0, accounts[0]);
+		let [targetDifficultyWei, blockNumber, totalMiningWei, totalMiningAttempts, currentAttemptOffset, payed, payee, isCreated] = await token.getBlockData(0);
+		// Let's verify defaults
+		assert.equal(targetDifficultyWei, minimumWei());
+		assert.equal(blockNumber, 0);
+		assert.equal(totalMiningWei, minimumWei());
+		assert.equal(totalMiningAttempts, 1);
+		assert.equal(currentAttemptOffset, minimumWei());
+		assert.equal(payed, true);
+		assert.equal(payee, accounts[0]);
+		assert.equal(isCreated, true);
+	});
 
 	it('should adjust the reward based on blocks mined/claimed', async function() {
 		let token = await BitcoineumMock.new();
