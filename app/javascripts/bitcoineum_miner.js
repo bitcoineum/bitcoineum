@@ -203,74 +203,70 @@ class BitcoineumMiner {
 
 	}
 
-	initializeState(currentExternalBlock) {
+	async update_balance() {
+		var bte = await this.bitcoineum_contract.deployed();
+		let a = await bte.balanceOf.call(this.mining_account);
+		this.balance = a.dividedBy(100000000).valueOf();
+	}
+
+	async initializeState(currentExternalBlock) {
         var self = this;
 
-        var bte;
-        this.bitcoineum_contract.deployed().then(function(instance) {
-        bte = instance;
-        // Let's query the contract for important initial state variables
-        // We will update this state as we get Events from the contract
-        // that change the processing state
-        return Promise.all([bte.balanceOf.call(self.mining_account,
-          	                   	   {from: self.mining_account}),
-          	                  bte.getContractState.call()])
-        }).then(function([balance,
-        	              contractState]) {
+        var bte = await this.bitcoineum_contract.deployed();
 
-		    self.balance = balance;
+        var [balance, contractState] = await Promise.all([bte.balanceOf.call(self.mining_account, {from: self.mining_account}), bte.getContractState.call()]);
+        self.balance = balance.dividedBy(100000000).valueOf();
 
-			// External best block on sync
-		    self.external_block = currentExternalBlock;
+	// External best block on sync
+	self.external_block = currentExternalBlock;
 
-		    // Break out the contract state into it's respective
-		    // Variables
-		    // Wei should be left as big numbers
-		    self.currentDifficultyWei = contractState[0];
-		    self.minimumDifficultyThresholdWei = contractState[1];
+	// Break out the contract state into it's respective
+	// Variables
+	// Wei should be left as big numbers
+	self.currentDifficultyWei = contractState[0];
+	self.minimumDifficultyThresholdWei = contractState[1];
 
-		    self.last_processed_blockNumber = contractState[2].toNumber();
-		    self.blockCreationRate = contractState[3].toNumber();
-		    self.difficultyAdjustmentPeriod = contractState[4].toNumber();
-		    self.rewardAdjustmentPeriod = contractState[5].toNumber();
-		    self.lastDifficultyAdjustmentEthereumBlock = contractState[6].toNumber();
-		    self.totalBlocksMined = contractState[7].toNumber();
+	self.last_processed_blockNumber = contractState[2].toNumber();
+	self.blockCreationRate = contractState[3].toNumber();
+	self.difficultyAdjustmentPeriod = contractState[4].toNumber();
+	self.rewardAdjustmentPeriod = contractState[5].toNumber();
+	self.lastDifficultyAdjustmentEthereumBlock = contractState[6].toNumber();
+	self.totalBlocksMined = contractState[7].toNumber();
 
-		    // These should be left as big numbers
-		    self.totalWeiCommitted = contractState[8];
-		    self.totalWeiExpected = contractState[9];
-		    
-		    // Calculate the currently active Bitcoineum block
-		    self.blockNumber = self.currentBlock();
+	// These should be left as big numbers
+	self.totalWeiCommitted = contractState[8];
+	self.totalWeiExpected = contractState[9];
+	
+	// Calculate the currently active Bitcoineum block
+	self.blockNumber = self.currentBlock();
 
-		    self.minimumMineAttempt = self.currentDifficultyWei.dividedBy(1000000).ceil();
+	self.minimumMineAttempt = self.currentDifficultyWei.dividedBy(1000000).ceil();
 
-	        self.printStats();
-	        // Add the initial block
-	        self.addInitialBlock(contractState[10],   // b.targetDifficultyWei
-	        					 contractState[11],  // b.totalMiningWei
-	        					 contractState[12], // b.currentAttemptOffset
-	                             contractState[13]); // Did the user try to mine?
+	self.printStats();
+	// Add the initial block
+	self.addInitialBlock(contractState[10],   // b.targetDifficultyWei
+						contractState[11],  // b.totalMiningWei
+						contractState[12]); // b.currentAttemptOffset 
 
-		    // Let's watch for new blocks
-		    self.subscribeBlockWatching();
+	// Let's watch for new blocks
+	self.subscribeBlockWatching();
 
-		    // Let's replay mining attempts
-		    self.subscribeMiningAttempts(currentExternalBlock);
+	// Let's replay mining attempts
+	self.subscribeMiningAttempts(currentExternalBlock);
 
-		    // Let's replay mining claims
-		    self.subscribeClaimEvents(currentExternalBlock);
+	// Let's replay mining claims
+	self.subscribeClaimEvents(currentExternalBlock);
 
-		    // For debugging let's subscribe to log events
-		    // self.subscribeLogEvents(currentExternalBlock);
-		 })
-	}
+	// For debugging let's subscribe to log events
+	// self.subscribeLogEvents(currentExternalBlock);
+		}
 
 	printStats() {
         var self = this;
 		self.logger("Miner State");
 		self.logger("-------------------");
-		self.logger("Block Number: " + self.blockNumber);
+		self.logger("Bitcoineum balance: " + self.balance);
+		self.logger("Block Window: " + self.blockNumber);
 		self.logger("Minimum threshold Wei: " + self.minimumDifficultyThresholdWei + " (" + web3.fromWei(self.minimumDifficultyThresholdWei, 'ether') + " ether)");
 		self.logger("Minimum mining attempt Wei: " + self.minimumMineAttempt + " (" + web3.fromWei(self.minimumMineAttempt, 'ether') + " ether)");
 		self.logger("Block creation rate: " + self.blockCreationRate);
@@ -319,48 +315,39 @@ class BitcoineumMiner {
 	  }).catch(console.error);
 	}
 
-	subscribeMiningAttempts(currentBlock) {
+	async subscribeMiningAttempts(currentBlock) {
   	  var self = this;
-  	  var bte;
-  	  this.bitcoineum_contract.deployed().then(function(instance) {
-  	  	  bte = instance;
-  	  	  var event = bte.MiningAttemptEvent({fromBlock: currentBlock});
-  	  	  self.logger("Watching mining attempts from block: " + (currentBlock));
-  	  	  event.watch(function(error, response) {
-  	  	  	  // This could easily be extended to emit events via registered functions
-  	  	  	  // to create an extended interface
-  	  	  	  if (self.debug) {
-  	  	  	  	  self.logger("Mine attempt: [" +  response.args._blockNumber.toString() + "][" + response.args._from + "][" + response.args._value.toString() + "][" + response.args._totalMinedWei.toString() + "]");
-			  }
-		  });
-	  });
-	}
+  	  var bte = await this.bitcoineum_contract.deployed();
+  	  var event = bte.MiningAttemptEvent({fromBlock: currentBlock});
+  	  	self.logger("Watching mining attempts from block: " + (currentBlock));
+		event.watch(function(error, response) {
+			// This could easily be extended to emit events via registered functions
+			// to create an extended interface
+			if (self.debug) {
+				self.logger("Mine attempt: [" +  response.args._blockNumber.toString() + "][" + response.args._from + "][" + response.args._value.toString() + "][" + response.args._totalMinedWei.toString() + "]");
+			}
+		});
+	  }
 
-	subscribeClaimEvents(currentBlock) {
-  	  var self = this;
-  	  var bte;
-  	  this.bitcoineum_contract.deployed().then(function(instance) {
-  	  	  bte = instance;
-  	  	  var event = bte.BlockClaimedEvent({fromBlock: currentBlock});
-  	  	  self.logger("Debug: Watching reward claims from block: " + (currentBlock));
+	async subscribeClaimEvents(currentBlock) {
+		var self = this;
+		var bte = await this.bitcoineum_contract.deployed();
+		var event = bte.BlockClaimedEvent({fromBlock: currentBlock});
+		self.logger("Debug: Watching reward claims from block: " + (currentBlock));
   	  	  event.watch(function(error, response) {
   	  	  	  if (self.debug) {
   	  	  	  	  self.logger("Block Claimed: [" +  response.args._blockNumber.toString() + "][" + response.args._from + "][" + response.args._forCreditTo + "][" + response.args._reward.toString() + "]");
 			  }
 		  });
-	  });
 	}
 
-	subscribeLogEvents(currentBlock) {
-  	  var self = this;
-  	  var bte;
-  	  this.bitcoineum_contract.deployed().then(function(instance) {
-  	  	  bte = instance;
-  	  	  var event = bte.LogEvent({fromBlock: currentBlock});
-  	  	  event.watch(function(error, response) {
-  	  	  	  self.logger("Log " + response.args._info.toString());
-		  });
-	  });
+	async subscribeLogEvents(currentBlock) {
+		var self = this;
+		var bte = await this.bitcoineum_contract.deployed()
+		var event = bte.LogEvent({fromBlock: currentBlock});
+			event.watch(function(error, response) {
+				self.logger("Log " + response.args._info.toString());
+			});
 	}
 
 	addInitialBlock(blockTargetDifficultyWei, blockTotalMiningWei, blockCurrentAttemptOffset) {
@@ -377,8 +364,8 @@ class BitcoineumMiner {
 	addNewBlock(web3BlockData) {
 		var self = this;
 		// Create a new block entry
-		let previous_blocknum = self.blockNumber - 1;
 		self.blockNumber = self.currentBlock();
+		let previous_blocknum = self.blockNumber - 1;
 		// Just because we are creating a new Bitcoineum block doesn't mean that the
 		// block exists in the Bitcoineum contract, that won't happen until there is a mining
 		// attempt.
@@ -457,32 +444,28 @@ class BitcoineumMiner {
 
 	// Send a mine attempt transaction
 	// If there are no arguments use the current minimum difficulty
-	mine() {
+	async mine() {
 		var self = this;
-		var bte;
-		self.bitcoineum_contract.deployed().then(function(instance) {
-			bte = instance;
-			var attemptValue = self.calculateAttemptValue();
-			self.spend += attemptValue;
-			if (self.spend >= self.maximumSpend) {
-				// We have exceeded the max spend
-				// We may have pending redeems 
-				self.logger("Maximum spend exceeded, halting auto mine");
-				self.auto_mine = false;
-				return;
-			}
-			return bte.mine({from: self.mining_account,
-				             gas: 400000, //270000
-				             value: self.calculateAttemptValue() });
-        }).then(function(Res) {
-        	      // We won't get a result from the state modifying transaction
-        	      // Have to wait for a mining attempt event
-        	      self.logger("Block window " + self.blockNumber + " [Pending]");
-        	      self.tracked_blocks[self.blockNumber].miningAttempted = true;
-        }).catch(function(e) {
-        	self.logger("Block window " + self.blockNumber + " [Error]");
-        	self.logger(e);
-        });
+		var bte = await this.bitcoineum_contract.deployed()
+		var attemptValue = self.calculateAttemptValue();
+		self.spend += attemptValue;
+		if (self.spend >= self.maximumSpend) {
+			// We have exceeded the max spend
+			// We may have pending redeems 
+			self.logger("Maximum spend exceeded, halting auto mine");
+			self.auto_mine = false;
+			return;
+		}
+		try {
+		let Res = await bte.mine({from: self.mining_account,
+			gas: 400000, //270000
+			value: self.calculateAttemptValue() });
+		self.logger("Block window " + self.blockNumber + " [Pending]");
+		self.tracked_blocks[self.blockNumber].miningAttempted = true;
+		} catch(e) {
+			self.logger("Block window " + self.blockNumber + " [Error]");
+			self.logger(e);
+		}
 	}
 
 	// Did we win this block?
@@ -490,55 +473,49 @@ class BitcoineumMiner {
 	// to do this locally because block reorganizations
 	// could mislead us.
 	// If the network says we won, then we can try and claim our prize
-	check(block_to_check, callbackFun) {
-		self.logger("Block window " + block_to_check + " [Check] ");
+	async check(block_to_check, callbackFun) {
 		var self = this;
-		var bte;
-		
-		self.bitcoineum_contract.deployed().then(function(instance) {
-			bte = instance;
-			return bte.checkWinning.call(block_to_check,
-				                    {from: self.mining_account});
-        }).then(function(Result) {
-        	if (callbackFun) {
-        		callbackFun(Result);
-			} else {
-				// Default fun
-        	    if (Result) {
-        	    	self.logger("Block window " + block_to_check + " [Won!]");
-			    } else {
-			    	self.logger("Block window " + block_to_check + " [Lost]");
-			    }
-			}
-        }).catch(function(e) {
+		self.logger("Block window " + block_to_check + " [Check] ");
+		var bte = await self.bitcoineum_contract.deployed();
+
+		try {
+			let Result = await bte.checkWinning.call(block_to_check,
+			                                     {from: self.mining_account});
+		    self.logger("mining attempted so checking");
+		    if (callbackFun) {
+		    	callbackFun(Result);
+		    } else {
+		    	// Default fun
+		    	if (Result) {
+		    		self.logger("Block window " + block_to_check + " [Won!]");
+		    	} else {
+		    		self.logger("Block window " + block_to_check + " [Lost]");
+		    	}
+		    }
+		} catch(e) {
           self.logger(e);
-          self.setStatus("Block window " + block_to_check + " [Error]");
-        });
-
-
+          self.logger("Block window " + block_to_check + " [Error]");
+        }
 	}
 
 	// If we won, we should be able to claim the block
 	// and redeem the Bitcoineum into our account
 	
-	claim(block_to_claim) {
+	async claim(block_to_claim) {
 		var self = this;
-		var bte;
-		
-		self.bitcoineum_contract.deployed().then(function(instance) {
-			bte = instance;
-			return bte.claim(block_to_claim,
+		var bte = await self.bitcoineum_contract.deployed();
+		try {
+			let Result = await bte.claim(block_to_claim,
 				             self.credit_account, // forCreditTo
 				             {from: self.mining_account,
 				             	 gas: 400000});
-        }).then(function(Result) {
-        		self.logger("Block window " + block_to_claim + " [Claimed]");
-        }).catch(function(e) {
-          self.logger(e);
-          self.setStatus("Block window " + block_to_claim + " [Claim Error]");
-        });
-
-
+			self.logger("Block window " + block_to_claim + " [Claimed]");
+			delete self.tracked_blocks[block_to_claim];
+			self.update_balance();
+		} catch(e) {
+			self.logger(e);
+			self.logger("Block window " + block_to_claim + " [Claim Error]");
+		}
 	}
 
 

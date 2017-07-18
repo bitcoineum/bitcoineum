@@ -38,7 +38,6 @@ window.App = {
 
 		console.log("Starting Bitcoineum Miner...");
 		self.setupWebConsole();
-		self.refreshStats();
 
 		});
   },
@@ -57,7 +56,7 @@ window.App = {
   	 document.body.appendChild(con.element);
 
      con.logHTML(
-     	"<h1>Bitcoineum Console Miner 0.2 </a></h1>"
+     	"<h1>Bitcoineum Console Miner 0.3 </a></h1>"
      );
 
 
@@ -134,37 +133,9 @@ window.App = {
     		}
     	}
     };
-  },
-
-  refreshStats: function() {
-    var self = this;
-
-    var bte;
-    Bitcoineum.deployed().then(function(instance) {
-      bte = instance;
-      return Promise.all([bte.balanceOf.call(account, {from: account}),
-                          bte.blockNumber.call(),
-                          bte.currentDifficultyWei.call(),
-                          bte.totalWeiExpected.call(),
-                          bte.totalWeiCommitted.call()]);
-    }).then(function([balance, block, currentDiff, expectedDiff, committedWei]) {
-      var balance_element = document.getElementById("balance");
-      var block_element = document.getElementById("bte_block");
-      var bte_difficulty_element = document.getElementById("bte_difficulty");
-      var bte_expected_element = document.getElementById("bte_expected");
-      var bte_committed_element = document.getElementById("bte_committed");
-      balance_element.innerHTML = balance.valueOf();
-      block_element.innerHTML = block.valueOf();
-      bte_difficulty_element.innerHTML = web3.fromWei(currentDiff.valueOf(), 'ether');
-      bte_expected_element.innerHTML = web3.fromWei(expectedDiff.valueOf(), 'ether');
-      bte_committed_element.innerHTML = web3.fromWei(committedWei.valueOf(), 'ether');
-    }).catch(function(e) {
-      console.log(e);
-      self.setStatus("Error getting balance; see log.");
-    });
   }
 
-};
+}
 
 window.addEventListener('load', function() {
   // Checking if Web3 has been injected by the browser (Mist/MetaMask)

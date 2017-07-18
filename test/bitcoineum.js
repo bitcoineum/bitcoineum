@@ -946,6 +946,8 @@ contract('BitcoineumTest', function(accounts) {
 		assert.equal(balance, 25*(10**8));
 		balance = await token.balanceOf(accounts[0]);
 		assert.equal(balance.valueOf(), 75*(10**8));
+		let total = await token.totalSupply();
+		assert.equal(total, 75*(10**8));
 	});
 
 

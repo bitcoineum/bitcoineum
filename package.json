@@ -5,7 +5,10 @@
   "main": "truffle.js",
   "scripts": {
     "test": "scripts/test.sh",
-    "console": "truffle console"
+    "console": "truffle console",
+    "build": "webpack",
+    "web": "scripts/web.sh",
+    "webpack": "webpack-dev-server"
   },
   "repository": {
     "type": "git",
@@ -20,15 +23,18 @@
     "bitcoin"
   ],
   "author": "Matt Branton <bitcoineum@protonmail.ch>",
-  "license": "GPLv3",
+  "license": "GPL-3.0",
   "bugs": {
     "url": "https://github.com/Bitcoineum/bitcoineum/issues"
   },
   "homepage": "https://github.com/Bitcoineum/bitcoineum",
   "dependencies": {
+    "babel-runtime": "^6.23.0",
     "truffle-hdwallet-provider": "0.0.3"
   },
   "devDependencies": {
+    "babel-loader": "^7.1.1",
+    "babel-plugin-transform-runtime": "^6.23.0",
     "babel-preset-es2015": "^6.18.0",
     "babel-preset-stage-2": "^6.18.0",
     "babel-preset-stage-3": "^6.17.0",
@@ -36,13 +42,18 @@
     "chai": "^4.0.2",
     "chai-as-promised": "^7.0.0",
     "chai-bignumber": "^2.0.0",
+    "copy-webpack-plugin": "^4.0.1",
     "coveralls": "^2.13.1",
+    "css-loader": "^0.28.4",
     "eslint": "^4.2.0",
     "eslint-config-google": "^0.9.1",
+    "ethereum-blocks": "^1.0.3",
     "ethereumjs-testrpc": "^3.0.2",
     "mocha-lcov-reporter": "^1.3.0",
     "moment": "^2.18.1",
     "solidity-coverage": "^0.1.0",
+    "style-loader": "^0.18.2",
+    "webpack": "^3.3.0",
     "zeppelin-solidity": "git://github.com/mbrix/zeppelin-solidity.git"
   }
 }
