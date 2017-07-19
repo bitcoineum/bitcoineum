@@ -209,63 +209,63 @@ class BitcoineumMiner {
 		this.balance = a.dividedBy(100000000).valueOf();
 	}
 
+	async update_state() {
+
+        var self = this;
+        var bte = await self.bitcoineum_contract.deployed();
+        let contractState = await bte.getContractState.call();
+
+        // Break out the contract state into it's respective
+        // Variables
+        // Wei should be left as big numbers
+        self.currentDifficultyWei = contractState[0];
+        self.minimumDifficultyThresholdWei = contractState[1];
+
+        self.last_processed_blockNumber = contractState[2].toNumber();
+        self.blockCreationRate = contractState[3].toNumber();
+        self.difficultyAdjustmentPeriod = contractState[4].toNumber();
+        self.rewardAdjustmentPeriod = contractState[5].toNumber();
+        self.lastDifficultyAdjustmentEthereumBlock = contractState[6].toNumber();
+        self.totalBlocksMined = contractState[7].toNumber();
+
+        // These should be left as big numbers
+        self.totalWeiCommitted = contractState[8];
+        self.totalWeiExpected = contractState[9];
+        
+        // Calculate the currently active Bitcoineum block
+        self.blockNumber = self.currentBlock();
+
+        self.minimumMineAttempt = self.currentDifficultyWei.dividedBy(1000000).ceil();
+
+        if (!self.tracked_blocks.length) {
+           // Add the initial block
+           self.addInitialBlock(contractState[10],   // b.targetDifficultyWei
+                               contractState[11],  // b.totalMiningWei
+                               contractState[12]); // b.currentAttemptOffset 
+        }
+
+    }
+
 	async initializeState(currentExternalBlock) {
         var self = this;
+        await self.update_balance();
+	    self.external_block = currentExternalBlock; // External best block on sync
+        await self.update_state();
+        self.printStats();
+	    self.subscribeBlockWatching(); // Let's watch for new blocks
+	    self.subscribeMiningAttempts(currentExternalBlock); // Let's replay mining attempts
+	    self.subscribeClaimEvents(currentExternalBlock); // Let's replay mining claims
+	    // For debugging let's subscribe to log events
+	    // self.subscribeLogEvents(currentExternalBlock);
+	}
 
-        var bte = await this.bitcoineum_contract.deployed();
-
-        var [balance, contractState] = await Promise.all([bte.balanceOf.call(self.mining_account, {from: self.mining_account}), bte.getContractState.call()]);
-        self.balance = balance.dividedBy(100000000).valueOf();
-
-	// External best block on sync
-	self.external_block = currentExternalBlock;
-
-	// Break out the contract state into it's respective
-	// Variables
-	// Wei should be left as big numbers
-	self.currentDifficultyWei = contractState[0];
-	self.minimumDifficultyThresholdWei = contractState[1];
-
-	self.last_processed_blockNumber = contractState[2].toNumber();
-	self.blockCreationRate = contractState[3].toNumber();
-	self.difficultyAdjustmentPeriod = contractState[4].toNumber();
-	self.rewardAdjustmentPeriod = contractState[5].toNumber();
-	self.lastDifficultyAdjustmentEthereumBlock = contractState[6].toNumber();
-	self.totalBlocksMined = contractState[7].toNumber();
-
-	// These should be left as big numbers
-	self.totalWeiCommitted = contractState[8];
-	self.totalWeiExpected = contractState[9];
-	
-	// Calculate the currently active Bitcoineum block
-	self.blockNumber = self.currentBlock();
-
-	self.minimumMineAttempt = self.currentDifficultyWei.dividedBy(1000000).ceil();
-
-	self.printStats();
-	// Add the initial block
-	self.addInitialBlock(contractState[10],   // b.targetDifficultyWei
-						contractState[11],  // b.totalMiningWei
-						contractState[12]); // b.currentAttemptOffset 
-
-	// Let's watch for new blocks
-	self.subscribeBlockWatching();
-
-	// Let's replay mining attempts
-	self.subscribeMiningAttempts(currentExternalBlock);
-
-	// Let's replay mining claims
-	self.subscribeClaimEvents(currentExternalBlock);
-
-	// For debugging let's subscribe to log events
-	// self.subscribeLogEvents(currentExternalBlock);
-		}
-
-	printStats() {
+	async printStats() {
+	    let minerbalance = web3.eth.getBalance(this.mining_account);
         var self = this;
 		self.logger("Miner State");
 		self.logger("-------------------");
 		self.logger("Bitcoineum balance: " + self.balance);
+		self.logger("Miner ethereum balance: " + minerbalance + " (" + web3.fromWei(minerbalance, 'ether') + " ether)");
 		self.logger("Block Window: " + self.blockNumber);
 		self.logger("Minimum threshold Wei: " + self.minimumDifficultyThresholdWei + " (" + web3.fromWei(self.minimumDifficultyThresholdWei, 'ether') + " ether)");
 		self.logger("Minimum mining attempt Wei: " + self.minimumMineAttempt + " (" + web3.fromWei(self.minimumMineAttempt, 'ether') + " ether)");
@@ -276,6 +276,7 @@ class BitcoineumMiner {
 		self.logger("Total wei committed for mining period: " + self.totalWeiCommitted + " (" + web3.fromWei(self.totalWeiCommitted, 'ether') + " ether)");
 		self.logger("Total wei expected for mining period: " + self.totalWeiExpected + " (" + web3.fromWei(self.totalWeiExpected, 'ether') + " ether)");
 		self.logger("-------------------");
+		self.printConfig();
 	}
 
 	printConfig() {
@@ -512,6 +513,7 @@ class BitcoineumMiner {
 			self.logger("Block window " + block_to_claim + " [Claimed]");
 			delete self.tracked_blocks[block_to_claim];
 			self.update_balance();
+			self.update_state();
 		} catch(e) {
 			self.logger(e);
 			self.logger("Block window " + block_to_claim + " [Claim Error]");
