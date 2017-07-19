@@ -1,0 +1,21 @@
+Bitcoineum
+
+Check out the website for more information:  http://www.bitcoineum.com/
+
+Contract address is 0x73dd069c299a5d691e9836243bcaec9c8c1d8734
+
+
+Mini mining tutorial
+
+Mining can be done directly from the web, install a local Ethereum node
+i.e geth --fast --cache=512  --rpcapi "db,eth,net,personal,web3" --rpccorsdomain "*" console
+
+use personal.unlockAccount on the account you wish to mine with
+personal.unlockAccount('0x3c8439b13d7a9c1c6fb6362a5493c59113c9c6ea', 'blahblahblah', 25000)
+
+At the web miner console
+help
+set-mining-account youraccount
+set-creditaccount coldwallet
+automine  // Kick starts the process
+
