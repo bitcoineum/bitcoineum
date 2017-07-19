@@ -205,7 +205,7 @@ class BitcoineumMiner {
 
 	async update_balance() {
 		var bte = await this.bitcoineum_contract.deployed();
-		let a = await bte.balanceOf.call(this.mining_account);
+		let a = await bte.balanceOf.call(this.credit_account);
 		this.balance = a.dividedBy(100000000).valueOf();
 	}
 
@@ -459,7 +459,7 @@ class BitcoineumMiner {
 		}
 		try {
 		let Res = await bte.mine({from: self.mining_account,
-			gas: 400000, //270000
+			gas: 600000, //270000
 			value: self.calculateAttemptValue() });
 		self.logger("Block window " + self.blockNumber + " [Pending]");
 		self.tracked_blocks[self.blockNumber].miningAttempted = true;
@@ -509,7 +509,7 @@ class BitcoineumMiner {
 			let Result = await bte.claim(block_to_claim,
 				             self.credit_account, // forCreditTo
 				             {from: self.mining_account,
-				             	 gas: 400000});
+				             	 gas: 600000});
 			self.logger("Block window " + block_to_claim + " [Claimed]");
 			delete self.tracked_blocks[block_to_claim];
 			self.update_balance();
