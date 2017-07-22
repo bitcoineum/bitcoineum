@@ -16,6 +16,6 @@ personal.unlockAccount('0x3c8439b13d7a9c1c6fb6362a5493c59113c9c6ea', 'blahblahbl
 At the web miner console
 help
 set-mining-account youraccount
-set-creditaccount coldwallet
+set-credit-account coldwallet
 automine  // Kick starts the process
 
