@@ -55,6 +55,9 @@ class BitcoineumMiner {
 		this.bitcoineum_contract.setProvider(web3.currentProvider);
 		this.mining_account = miningAccount;
 		this.credit_account = miningAccount;
+		this.default_mine_gas = 300000;
+		this.default_claim_gas = 100000;
+		this.default_gas_price = 0; // This is set by default_price callback
 		this.debug = false;
 		self.logger("Credit mining rewards to: " + this.credit_account);
 		this.auto_mine = false;
@@ -104,6 +107,8 @@ class BitcoineumMiner {
 
 	}
 
+
+
 	set_mining_account(miningAccount) {
 		if (web3.isAddress(miningAccount)) {
 			this.mining_account = miningAccount;
@@ -125,6 +130,18 @@ class BitcoineumMiner {
 	set_max_spend_value(value) {
 		this.maximumSpend = value;
 	}
+
+	set_mine_gas(value) {
+	    this.default_mine_gas = value;
+    }
+
+    set_claim_gas(value) {
+        this.default_claim_gas = value;
+    }
+
+    set_gas_price(value) {
+        this.default_gas_price = value;
+    }
 
 	set_max_attempt_value(value) {
 		// Probably should do some validation on this number
@@ -195,6 +212,22 @@ class BitcoineumMiner {
         });
 	}
 
+    async default_price() {
+	    return await new Promise(function(resolve, reject) {
+	        web3.eth.getGasPrice(function(err, result) {
+                err ? reject(err) : resolve(result);
+            })
+        });
+    }
+
+	async estimate_gas() {
+	    var myCallData = bte.mine.getData();
+	    var bte = await this.bitcoineum_contract.deployed();
+	    let a = await web3.estimateGas(myCallData, {value: self.calculateAttemptValue()});
+	    console.log("Got: " + a);
+	    console.log(a);
+    }
+
 	syncStatusChange() {
 		var self = this;
 		web3.eth.isSyncing(function(Sync) {
@@ -251,6 +284,7 @@ class BitcoineumMiner {
         await self.update_balance();
 	    self.external_block = currentExternalBlock; // External best block on sync
         await self.update_state();
+        self.default_gas_price = await self.default_price();
         self.printStats();
 	    self.subscribeBlockWatching(); // Let's watch for new blocks
 	    self.subscribeMiningAttempts(currentExternalBlock); // Let's replay mining attempts
@@ -275,6 +309,9 @@ class BitcoineumMiner {
 		self.logger("Total blocks mined: " + self.totalBlocksMined);
 		self.logger("Total wei committed for mining period: " + self.totalWeiCommitted + " (" + web3.fromWei(self.totalWeiCommitted, 'ether') + " ether)");
 		self.logger("Total wei expected for mining period: " + self.totalWeiExpected + " (" + web3.fromWei(self.totalWeiExpected, 'ether') + " ether)");
+		self.logger("Default mine gas: " + self.default_mine_gas + " gas");
+		self.logger("Default claim gas: " + self.default_claim_gas + " gas");
+		self.logger("Default gas price: " + self.default_gas_price + " wei" + " (" + web3.fromWei(self.default_gas_price, 'ether') + " ether)");
 		self.logger("-------------------");
 		self.printConfig();
 	}
@@ -459,7 +496,8 @@ class BitcoineumMiner {
 		}
 		try {
 		let Res = await bte.mine({from: self.mining_account,
-			gas: 600000, //270000
+			gas: self.default_mine_gas,
+			gasPrice: self.default_gas_price,
 			value: self.calculateAttemptValue() });
 		self.logger("Block window " + self.blockNumber + " [Pending]");
 		self.tracked_blocks[self.blockNumber].miningAttempted = true;
@@ -509,7 +547,8 @@ class BitcoineumMiner {
 			let Result = await bte.claim(block_to_claim,
 				             self.credit_account, // forCreditTo
 				             {from: self.mining_account,
-				             	 gas: 600000});
+				                 gas: self.default_claim_gas,
+				                 gasPrice: self.default_gas_price});
 			self.logger("Block window " + block_to_claim + " [Claimed]");
 			delete self.tracked_blocks[block_to_claim];
 			self.update_balance();

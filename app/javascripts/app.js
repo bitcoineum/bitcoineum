@@ -108,6 +108,15 @@ window.App = {
 		} else if(command.match(/^set-percentage-attempt/i)) {
 			let percentage = parseInt(command.match(/\d?\d?\d/i)[0]);
 			self.miner.set_attempt_percentage(percentage/100);
+		} else if(command.match(/^set-mine-gas/i)) {
+			let quant = command.match(/\d+/i);
+			self.miner.set_mine_gas(quant);
+		} else if(command.match(/^set-claim-gas/i)) {
+			let quant = command.match(/\d+/i);
+			self.miner.set_claim_gas(quant);
+		} else if(command.match(/^set-gas-price/i)) {
+			let wei = command.match(/\d+/i);
+			self.miner.set_gas_price(wei);
 		} else if(command.match(/^(!*\?+!*|(please |plz )?(((I )?(want|need)[sz]?|display|show( me)?|view) )?(the |some )?help|^(gimme|give me|lend me) ((the |some )?)help| a hand( here)?)/i)){
     		con.log("Bitcoineum Miner Help ");
     		con.log("stats -- Display current miner stats");
@@ -117,6 +126,9 @@ window.App = {
     		con.log("set-credit-account account -- Credits rewarded blocks to account, i.e a hardware wallet.");
     		con.log("set-max-spend wei -- Stop mining after this amount has been consumed");
     		con.log("set-max-attempt wei -- An individual mining attempt will be capped at this value");
+    		con.log("set-mine-gas quantity -- gas to use for mine");
+    		con.log("set-claim-gas quantity -- gas to use for claim");
+    		con.log("set-gas-price wei -- gas price to use for mine and claim");
     		con.log("set-percentage-attempt % -- %100 sets the attempt to the CurrentDifficulty of the block");
     		con.log("debug -- Enable/Disable debug events");
     	}else{
