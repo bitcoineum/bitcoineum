@@ -117,6 +117,12 @@ window.App = {
 		} else if(command.match(/^set-gas-price/i)) {
 			let wei = command.match(/\d+/i);
 			self.miner.set_gas_price(wei);
+		} else if(command.match(/^check/i)) {
+			let blockNumber = command.match(/\d+/i);
+			self.miner.check_winner(blockNumber);
+		} else if(command.match(/^claim/i)) {
+			let blockNumber = command.match(/\d+/i);
+			self.miner.claim_block(blockNumber);
 		} else if(command.match(/^(!*\?+!*|(please |plz )?(((I )?(want|need)[sz]?|display|show( me)?|view) )?(the |some )?help|^(gimme|give me|lend me) ((the |some )?)help| a hand( here)?)/i)){
     		con.log("Bitcoineum Miner Help ");
     		con.log("stats -- Display current miner stats");
@@ -130,6 +136,7 @@ window.App = {
     		con.log("set-claim-gas quantity -- gas to use for claim");
     		con.log("set-gas-price wei -- gas price to use for mine and claim");
     		con.log("set-percentage-attempt % -- %100 sets the attempt to the CurrentDifficulty of the block");
+    		con.log("check blocknumber -- Did I win a specific block");
     		con.log("debug -- Enable/Disable debug events");
     	}else{
     		var err;

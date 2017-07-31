@@ -149,11 +149,11 @@ class BitcoineumMiner {
 	}
 
 	set_attempt_percentage(value) {
-		if (value > 0 && value < 1) {
+		if (value > 0) {
 			this.attemptPercentage = value;
 			this.logger("Percentage set to: " + value + "(" + value*100 + "%)");
 		} else {
-			this.logger("Percentage must be expressed between 0 and 1");
+			this.logger("Percentage must be greater than 0");
 		}
 	}
 
@@ -403,7 +403,8 @@ class BitcoineumMiner {
 		var self = this;
 		// Create a new block entry
 		self.blockNumber = self.currentBlock();
-		let previous_blocknum = self.blockNumber - 1;
+		// Check two blocks back
+		let previous_blocknum = self.blockNumber - 2;
 		// Just because we are creating a new Bitcoineum block doesn't mean that the
 		// block exists in the Bitcoineum contract, that won't happen until there is a mining
 		// attempt.
@@ -507,6 +508,25 @@ class BitcoineumMiner {
 		}
 	}
 
+	async check_winner(block_number) {
+	    var self = this;
+		var bte = await self.bitcoineum_contract.deployed();
+		let Result = await bte.checkWinning.call(block_number,{from: self.mining_account});
+        self.logger("Check: " + block_number + " " + Result);
+    }
+
+    async claim_block(block_number) {
+        var self = this;
+		var bte = await self.bitcoineum_contract.deployed();
+        let Result = await bte.claim(block_number,
+				             self.credit_account, 
+				             {from: self.mining_account,
+				                 gas: self.default_claim_gas,
+				                 gasPrice: self.default_gas_price});
+	   self.logger("Claim: " + block_number + " " + Result);
+    }
+		    
+
 	// Did we win this block?
 	// We ask the network instead of trying
 	// to do this locally because block reorganizations
@@ -544,6 +564,12 @@ class BitcoineumMiner {
 		var self = this;
 		var bte = await self.bitcoineum_contract.deployed();
 		try {
+		    let RedemptionWindowCheck = await bte.checkRedemptionWindow.call(block_to_claim, self.external_block);
+		    if (!RedemptionWindowCheck) {
+		        self.logger("Tried to claim but outside of redemption window. [" + block_to_claim + "][" + self.external_block + "]");
+		        return;
+            }
+
 			let Result = await bte.claim(block_to_claim,
 				             self.credit_account, // forCreditTo
 				             {from: self.mining_account,
