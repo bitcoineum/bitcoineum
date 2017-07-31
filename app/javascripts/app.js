@@ -137,6 +137,7 @@ window.App = {
     		con.log("set-gas-price wei -- gas price to use for mine and claim");
     		con.log("set-percentage-attempt % -- %100 sets the attempt to the CurrentDifficulty of the block");
     		con.log("check blocknumber -- Did I win a specific block");
+    		con.log("claim blocknumber -- Try to force claim a Bitcoineum Block");
     		con.log("debug -- Enable/Disable debug events");
     	}else{
     		var err;
