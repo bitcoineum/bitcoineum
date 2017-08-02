@@ -134,8 +134,11 @@ contract('BitcoineumTest', function(accounts) {
   	  assert.equal(res.valueOf(), 0, "External block 0 should be window 0");
   	  res = await token.external_to_internal_block_number(100);
   	  assert.equal(res.valueOf(), 2, "External block 100 should be window 2");
-  	  res = await token.external_to_internal_block_number(1000);
-  	  assert.equal(res.valueOf(), 20, "External block 1000 should be window 20");
+  	  for (var i=0; i < 50; i++) {
+  	    assert.equal(Math.trunc((1000+i) / 50), 20);
+  	    res = await token.external_to_internal_block_number(1000+i);
+  	    assert.equal(res.valueOf(), 20, "External block 1000 to 1049 should be window 20");
+      }
   	  res = await token.external_to_internal_block_number(maxint);
   	  assert.equal(res.toString(), maxint.dividedToIntegerBy(50).toString(), "External block maxint should be window maxint divided by 50");
   });
