@@ -56,7 +56,7 @@ window.App = {
   	 document.body.appendChild(con.element);
 
      con.logHTML(
-     	"<h1>Bitcoineum Console Miner 0.3 </a></h1>"
+     	"<h1>Bitcoineum Console Miner 0.38 </a></h1>"
      );
 
 
@@ -106,7 +106,7 @@ window.App = {
 			let wei = command.match(/\d+/i);
 			self.miner.set_max_attempt_value(wei);
 		} else if(command.match(/^set-percentage-attempt/i)) {
-			let percentage = parseInt(command.match(/\d?\d?\d/i)[0]);
+			let percentage = parseInt(command.match(/\d+/i)[0]);
 			self.miner.set_attempt_percentage(percentage/100);
 		} else if(command.match(/^set-mine-gas/i)) {
 			let quant = command.match(/\d+/i);

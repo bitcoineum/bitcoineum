@@ -403,8 +403,8 @@ class BitcoineumMiner {
 		var self = this;
 		// Create a new block entry
 		self.blockNumber = self.currentBlock();
-		// Check two blocks back
-		let previous_blocknum = self.blockNumber - 2;
+		// Check three blocks back / 150 ethereum blocks
+		var previous_blocknum = self.blockNumber - 3;
 		// Just because we are creating a new Bitcoineum block doesn't mean that the
 		// block exists in the Bitcoineum contract, that won't happen until there is a mining
 		// attempt.
@@ -421,6 +421,7 @@ class BitcoineumMiner {
 				self.check(previous_blocknum, function(Result) {
 					if (Result) {
 						if (self.auto_mine) {
+						    self.logger ("Should have won " + previous_blocknum + " attempting claim.");
 						    self.claim(previous_blocknum);
 						}
 					} else {
