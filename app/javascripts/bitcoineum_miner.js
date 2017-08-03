@@ -56,7 +56,7 @@ class BitcoineumMiner {
 		this.mining_account = miningAccount;
 		this.credit_account = miningAccount;
 		this.default_mine_gas = 300000;
-		this.default_claim_gas = 100000;
+		this.default_claim_gas = 200000;
 		this.default_gas_price = 0; // This is set by default_price callback
 		this.debug = false;
 		self.logger("Credit mining rewards to: " + this.credit_account);
